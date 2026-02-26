@@ -27,7 +27,7 @@ let cli = yargs(args)
   .command("mail", "Search, read, and send Gmail messages")
   .command("auth", "Run OAuth flow and store/update token for an account")
   .command("accounts", "List token-backed accounts available to this CLI")
-  .command("poll", "Poll for unread messages and emit JSON when found")
+  .command("poll", "Poll for Gmail query matches and emit JSON when found")
   .command(
     "help [command]",
     "Show main help or help for a specific subcommand",
@@ -61,13 +61,16 @@ let cli = yargs(args)
   )
   .example("$0 auth --account=personal", "Authorize and store a token for an account")
   .example("$0 accounts --format=json", "List accounts in machine-readable form")
-  .example("$0 poll --account=personal --interval-ms=2000", "Poll for unread messages and emit JSON once found")
+  .example(
+    "$0 poll --account=personal --query='category:promotions is:unread' --interval-ms=2000",
+    "Poll for query matches and emit JSON once found",
+  )
   .epilog(
     [
       "Automation notes:",
       "- `mail` outputs JSON.",
       "- `accounts` outputs JSON by default (`--format=text` for line output).",
-      "- `poll` outputs JSON once unread messages exist, then exits.",
+      "- `poll` outputs JSON once query matches exist, then exits.",
       "- `auth` prints a success line with the saved token path.",
       "- `--verbose` can be used at top-level or subcommand level for stderr diagnostics.",
       "- Use `mail --help` and `mail send --help` for full option/behavior contracts.",

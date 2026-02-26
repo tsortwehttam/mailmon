@@ -30,23 +30,28 @@ let pollUnread = async (params: {
   account: string
   intervalMs: number
   maxResults: number
+  query: string
   out?: string
   verbose: boolean
 }) => {
   while (true) {
     let response = await gmail(params.account, params.verbose).users.messages.list({
       userId: "me",
-      q: "is:unread",
+      q: params.query,
       maxResults: params.maxResults,
     })
     let messages = response.data.messages ?? []
-    verboseLog(params.verbose, "poll iteration", { unreadCount: messages.length, intervalMs: params.intervalMs })
+    verboseLog(params.verbose, "poll iteration", {
+      query: params.query,
+      unreadCount: messages.length,
+      intervalMs: params.intervalMs,
+    })
 
     if (messages.length > 0) {
       let payload = {
         polledAt: new Date().toISOString(),
         account: params.account,
-        query: "is:unread",
+        query: params.query,
         messages,
       }
       let json = JSON.stringify(payload, null, 2)
@@ -87,11 +92,16 @@ export let configurePollCli = (cli: Argv) =>
         if (!Number.isFinite(value) || value < 1 || value > 500) throw new Error("--max-results must be 1..500")
         return Math.floor(value)
       },
-      describe: "Maximum unread messages to return once found",
+      describe: "Maximum matched messages to return once found",
+    })
+    .option("query", {
+      type: "string",
+      default: "is:unread",
+      describe: "Gmail search query to poll for (for example: in:inbox is:unread)",
     })
     .option("out", {
       type: "string",
-      describe: "Optional file path to also write unread JSON payload",
+      describe: "Optional file path to also write matched-message JSON payload",
     })
     .option("verbose", {
       alias: "v",
@@ -99,12 +109,14 @@ export let configurePollCli = (cli: Argv) =>
       default: false,
       describe: "Print diagnostic details to stderr",
     })
-    .example("$0 --account=personal", "Poll until unread exists, print JSON to stdout, then exit")
+    .example("$0 --account=personal", "Poll until query matches exist, print JSON to stdout, then exit")
+    .example("$0 --query='in:inbox is:unread'", "Only poll for unread messages currently in Inbox")
+    .example("$0 --query='category:promotions is:unread'", "Poll for unread Gmail promotions messages")
     .example("$0 --interval-ms=2000 --out ./tmp/unread.json", "Poll every 2s and also write JSON to a file")
     .epilog(
       [
         "Output contract:",
-        "- Emits exactly one JSON object to stdout when unread messages are found, then exits.",
+        "- Emits exactly one JSON object to stdout when query matches are found, then exits.",
         "- JSON payload shape: { polledAt, account, query, messages }.",
         "- Use shell pipes/redirection for downstream processing.",
         "- `--out` additionally writes the same JSON payload to a file.",
@@ -121,6 +133,7 @@ export let parsePollCli = (args: string[], scriptName = "poll") =>
         account: argv.account,
         intervalMs: argv.intervalMs,
         maxResults: argv.maxResults,
+        query: argv.query,
         out: argv.out,
         verbose: argv.verbose,
       }),

@@ -173,10 +173,12 @@ Output:
 
 ### `mailmaster poll`
 
-Polls for unread mail (`is:unread`) until at least one message exists, then emits JSON and exits.
+Polls for Gmail query matches (default query: `is:unread`) until at least one message exists, then emits JSON and exits.
 
 ```bash
 mailmaster poll --account=personal
+mailmaster poll --query "in:inbox is:unread"
+mailmaster poll --query "category:promotions is:unread"
 mailmaster poll --interval-ms=2000 --out ./tmp/unread.json
 ```
 
@@ -190,6 +192,7 @@ Important poll flags:
 
 - `--interval-ms` polling interval in milliseconds (default `5000`)
 - `--max-results` max unread messages returned once found (default `20`)
+- `--query` Gmail search query to poll for (default `is:unread`)
 - `--out` optional file path to also write the same JSON payload
 
 Output:
