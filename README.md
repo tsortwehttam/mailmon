@@ -101,11 +101,19 @@ Subcommands:
 
 ```bash
 mailmaster mail --account=personal search "from:alerts@example.com newer_than:7d"
+mailmaster mail --account=personal search "in:inbox is:unread" --fetch metadata
 ```
 
 Output:
 
 - JSON array of Gmail message references (`id`, `threadId`, etc.)
+- With `--fetch metadata|full`, returns:
+  - `{ query, messages, resolvedMessages }`
+
+Important search flags:
+
+- `--max-results` maximum matched messages to return (default `20`)
+- `--fetch` optional hydration mode: `none` (default), `metadata`, or `full`
 
 #### Read
 
@@ -179,6 +187,8 @@ Polls for Gmail query matches (default query: `is:unread`) until at least one me
 mailmaster poll --account=personal
 mailmaster poll --query "in:inbox is:unread"
 mailmaster poll --query "category:promotions is:unread"
+mailmaster poll --query "in:inbox is:unread" --fetch metadata
+mailmaster poll --query "in:inbox is:unread" --fetch full
 mailmaster poll --interval-ms=2000 --out ./tmp/unread.json
 ```
 
@@ -193,12 +203,13 @@ Important poll flags:
 - `--interval-ms` polling interval in milliseconds (default `5000`)
 - `--max-results` max unread messages returned once found (default `20`)
 - `--query` Gmail search query to poll for (default `is:unread`)
+- `--fetch` optional hydration mode: `none` (default), `metadata`, or `full`
 - `--out` optional file path to also write the same JSON payload
 
 Output:
 
 - One JSON object to `stdout` when unread messages are found, then process exits.
-- JSON shape: `{ polledAt, account, query, messages }`
+- JSON shape: `{ polledAt, account, query, messages, resolvedMessages? }`
 
 ## Agent-Friendly Notes
 

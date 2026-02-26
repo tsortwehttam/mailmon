@@ -181,16 +181,63 @@ export let configureMailCli = (cli: Argv) =>
     })
     .command(
     "search <query>",
-    "Search messages by Gmail query; returns JSON array of message id/threadId pairs",
+    "Search messages by Gmail query; returns refs or hydrated message payloads",
     y =>
-      y.positional("query", {
-        type: "string",
-        describe: 'Gmail query, e.g. "from:someone newer_than:7d"',
-      }),
+      y
+        .positional("query", {
+          type: "string",
+          describe: 'Gmail query, e.g. "from:someone newer_than:7d"',
+        })
+        .option("max-results", {
+          type: "number",
+          default: 20,
+          coerce: value => {
+            if (!Number.isFinite(value) || value < 1 || value > 500) throw new Error("--max-results must be 1..500")
+            return Math.floor(value)
+          },
+          describe: "Maximum matched messages to return",
+        })
+        .option("fetch", {
+          type: "string",
+          default: "none",
+          choices: ["none", "metadata", "full"] as const,
+          describe: "Optionally fetch matched message payloads: none, metadata, or full",
+        }),
     async argv => {
-      let r = await gmail(argv.account, argv.verbose).users.messages.list({ userId: "me", q: argv.query, maxResults: 20 })
+      let client = gmail(argv.account, argv.verbose)
+      let r = await client.users.messages.list({ userId: "me", q: argv.query, maxResults: argv.maxResults })
       let msgs = r.data.messages ?? []
-      verboseLog(argv.verbose, "search results", { count: msgs.length })
+      let resolvedMessages: unknown[] | undefined
+      if (argv.fetch !== "none") {
+        resolvedMessages = []
+        for (let message of msgs) {
+          if (!message.id) continue
+          let fetched = await client.users.messages.get({
+            userId: "me",
+            id: message.id,
+            format: argv.fetch,
+            ...(argv.fetch === "metadata"
+              ? { metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID"] }
+              : {}),
+          })
+          resolvedMessages.push(fetched.data)
+        }
+      }
+      verboseLog(argv.verbose, "search results", { count: msgs.length, fetch: argv.fetch })
+      if (resolvedMessages) {
+        console.log(
+          JSON.stringify(
+            {
+              query: argv.query,
+              messages: msgs,
+              resolvedMessages,
+            },
+            null,
+            2,
+          ),
+        )
+        return
+      }
       console.log(JSON.stringify(msgs, null, 2))
     },
     )
@@ -320,6 +367,7 @@ export let configureMailCli = (cli: Argv) =>
     },
     )
     .example("$0 search \"from:alerts@example.com newer_than:7d\"", "Find recent messages")
+    .example("$0 search \"in:inbox is:unread\" --fetch=metadata", "Find matches and include hydrated metadata payloads")
     .example("$0 read 190cf9f55b05efcc", "Read metadata for one Gmail message id")
     .example("$0 send --to user@example.com --subject \"Hi\" --body \"Hello\" --yes", "Send plain-text email")
     .example(
