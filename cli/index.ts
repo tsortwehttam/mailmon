@@ -3,6 +3,7 @@ import { hideBin } from "yargs/helpers"
 import { parseAccountsCli } from "../platforms/mail/accounts"
 import { parseAuthCli } from "../platforms/mail/auth"
 import { parseMailCli } from "../platforms/mail/mail"
+import { parseCorpusCli } from "../src/corpus/cli"
 import { parseIngestCli, parseWatchCli } from "../src/ingest/cli"
 import { parseSlackCli } from "../platforms/slack"
 import { parseTeamsCli } from "../platforms/teams"
@@ -10,7 +11,7 @@ import { parseWhatsAppCli } from "../platforms/whatsapp"
 import { verboseLog } from "../src/Verbose"
 
 let args = hideBin(process.argv)
-let subcommands = new Set(["mail", "slack", "teams", "whatsapp", "ingest", "watch", "help"])
+let subcommands = new Set(["mail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus", "help"])
 let verbose = args.includes("--verbose") || args.includes("-v")
 let commandIndex = args.findIndex(x => !x.startsWith("-"))
 let command = commandIndex >= 0 ? args[commandIndex] : undefined
@@ -27,9 +28,10 @@ let cli = yargs(args)
     default: false,
     describe: "Print diagnostic details to stderr",
   })
-  .command("mail", "Gmail: search, read, send, export, corpus, thread, count, mark-read, archive")
+  .command("mail", "Gmail: search, read, send, export, thread, count, mark-read, archive")
   .command("ingest", "One-shot: ingest new messages across accounts, emit to sink, then exit (cron-friendly)")
   .command("watch", "Daemon: continuously ingest new messages across accounts, emit to sink as they arrive")
+  .command("corpus", "Build LLM-oriented corpus (messages.jsonl, chunks.jsonl, threads.jsonl) from ingested messages")
   .command("slack", "Slack: search, read, send messages (planned)")
   .command("teams", "Teams: search, read, send messages (planned)")
   .command("whatsapp", "WhatsApp: read, send messages (planned)")
@@ -40,7 +42,7 @@ let cli = yargs(args)
       y
         .positional("platform", {
           type: "string",
-          choices: ["mail", "slack", "teams", "whatsapp", "ingest", "watch"] as const,
+          choices: ["mail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus"] as const,
           describe: "Platform or command to show help for",
         })
         .positional("command", {
@@ -56,6 +58,7 @@ let cli = yargs(args)
       if (argv.platform === "mail") return parseMailCli(helpArgs, "messagemon mail")
       if (argv.platform === "ingest") return parseIngestCli(helpArgs, "messagemon ingest")
       if (argv.platform === "watch") return parseWatchCli(helpArgs, "messagemon watch")
+      if (argv.platform === "corpus") return parseCorpusCli(helpArgs, "messagemon corpus")
       if (argv.platform === "slack") return parseSlackCli(helpArgs, "messagemon slack")
       if (argv.platform === "teams") return parseTeamsCli(helpArgs, "messagemon teams")
       if (argv.platform === "whatsapp") return parseWhatsAppCli(helpArgs, "messagemon whatsapp")
@@ -71,12 +74,14 @@ let cli = yargs(args)
   .example("$0 watch --account=work --sink=ndjson | my-router", "Stream messages to another process")
   .example("$0 watch --sink=dir --out-dir=/data/inbox --save-attachments", "Daemon: save to disk as messages arrive")
   .example("$0 watch --sink=exec --exec-cmd='./agent.sh' --mark-read", "Run agent per message")
+  .example("$0 corpus --from=./inbox --out-dir=./corpus", "Build LLM corpus from ingested messages")
   .epilog(
     [
       "Commands:",
-      "  mail      — Gmail operations: search, read, send, export, corpus, etc.",
+      "  mail      — Gmail operations: search, read, send, export, etc.",
       "  ingest    — One-shot multi-account ingest. Cron-friendly. Emits UnifiedMessage.",
       "  watch     — Continuous multi-account daemon. Emits UnifiedMessage as they arrive.",
+      "  corpus    — Build LLM corpus from ingested message directories.",
       "",
       "Platforms (planned):",
       "  slack     — Slack via @slack/web-api",
@@ -183,6 +188,17 @@ else if (!dispatched && command === "watch") {
 }
 
 // ---------------------------------------------------------------------------
+// Corpus — build LLM corpus from ingested message directories
+// ---------------------------------------------------------------------------
+
+else if (!dispatched && command === "corpus") {
+  parseCorpusCli([...forwardedVerboseArgs, ...commandArgs], "messagemon corpus").catch(e => {
+    console.error(e?.message ?? e)
+    process.exit(1)
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Slack platform
 // ---------------------------------------------------------------------------
 
@@ -231,6 +247,8 @@ else if (!dispatched && command === "help") {
     parseIngestCli([...forwardedVerboseArgs, "--help"], "messagemon ingest")
   } else if (subhelp === "watch") {
     parseWatchCli([...forwardedVerboseArgs, "--help"], "messagemon watch")
+  } else if (subhelp === "corpus") {
+    parseCorpusCli([...forwardedVerboseArgs, "--help"], "messagemon corpus")
   } else if (subhelp === "slack") {
     parseSlackCli([...forwardedVerboseArgs, "--help"], "messagemon slack")
   } else if (subhelp === "teams") {

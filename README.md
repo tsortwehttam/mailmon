@@ -58,6 +58,17 @@ messagemon watch --sink=dir --out-dir=/data/inbox --save-attachments --interval-
 messagemon watch --sink=exec --exec-cmd='./agent.sh' --mark-read
 ```
 
+### `messagemon corpus`
+
+Build an LLM-oriented corpus from ingested message directories. Platform-agnostic.
+
+```bash
+messagemon corpus --from=./inbox --out-dir=./corpus
+messagemon corpus --from=./inbox --out-dir=./corpus --chunk-chars=8000
+```
+
+Outputs `messages.jsonl`, `chunks.jsonl`, `threads.jsonl`, and `summary.json`.
+
 ### Sinks
 
 Both `ingest` and `watch` support three output sinks:
@@ -92,8 +103,7 @@ Direct Gmail operations. All subcommands accept `--account` and `--verbose`.
 | `mail count <query>` | Return Gmail's `resultSizeEstimate` for a query |
 | `mail thread <threadId>` | Fetch all messages in a thread; `--format=json\|text` |
 | `mail read <messageId>` | Read one message; `--format=json\|text`, `--save-attachments=DIR` |
-| `mail export` | Export messages to per-message directories (legacy, use `ingest --sink=dir` instead) |
-| `mail corpus` | Build LLM corpus (`messages.jsonl`, `chunks.jsonl`, `threads.jsonl`) from export or ingest directories |
+| `mail export` | Export messages to per-message directories (use `ingest --sink=dir` instead) |
 | `mail send` | Send with `--to`, `--cc`, `--bcc`, `--attach`, `--thread-id`, `--yes` (required) |
 | `mail mark-read <id>` | Remove UNREAD label |
 | `mail archive <id>` | Remove INBOX label |
@@ -122,6 +132,10 @@ messagemon ingest / watch
       ├─ ndjson → stdout / file
       ├─ dir → unified.json + artifacts per message
       └─ exec → shell command per message
+
+messagemon corpus
+  │
+  └─ Reads unified.json dirs → messages.jsonl, chunks.jsonl, threads.jsonl
 ```
 
 All output uses `UnifiedMessage` — a platform-agnostic envelope defined in `src/types.ts`.

@@ -6,7 +6,6 @@ import { google } from "googleapis"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../../src/CliConfig"
-import { buildCorpus } from "./CorpusBuilder"
 import { buildRunDirName, collectAttachments, decodeBase64Url, exportMessageArtifacts, headerMap, pickBody } from "./MessageExport"
 import type { Argv } from "yargs"
 import { verboseLog } from "../../src/Verbose"
@@ -739,80 +738,6 @@ export let configureMailCli = (cli: Argv) =>
     },
     )
     .command(
-    "corpus",
-    "Build an LLM-oriented corpus from mail export directories",
-    y =>
-      y
-        .option("from-export", {
-          type: "string",
-          demandOption: true,
-          describe: "Root directory produced by `mail export` containing per-message folders",
-        })
-        .option("out-dir", {
-          type: "string",
-          demandOption: true,
-          describe: "Directory where corpus files will be written",
-        })
-        .option("chunk-chars", {
-          type: "number",
-          default: 4000,
-          coerce: value => {
-            if (!Number.isFinite(value) || value < 500) throw new Error("--chunk-chars must be >= 500")
-            return Math.floor(value)
-          },
-          describe: "Maximum characters per chunk written to chunks.jsonl",
-        })
-        .option("chunk-overlap-chars", {
-          type: "number",
-          default: 400,
-          coerce: value => {
-            if (!Number.isFinite(value) || value < 0) throw new Error("--chunk-overlap-chars must be >= 0")
-            return Math.floor(value)
-          },
-          describe: "Character overlap between adjacent chunks",
-        })
-        .option("max-attachment-bytes", {
-          type: "number",
-          default: 250000,
-          coerce: value => {
-            if (!Number.isFinite(value) || value < 1) throw new Error("--max-attachment-bytes must be positive")
-            return Math.floor(value)
-          },
-          describe: "Maximum bytes read from any one attachment when extracting text",
-        })
-        .option("max-attachment-chars", {
-          type: "number",
-          default: 20000,
-          coerce: value => {
-            if (!Number.isFinite(value) || value < 1) throw new Error("--max-attachment-chars must be positive")
-            return Math.floor(value)
-          },
-          describe: "Maximum normalized characters kept from any one attachment",
-        })
-        .option("thread-excerpt-chars", {
-          type: "number",
-          default: 500,
-          coerce: value => {
-            if (!Number.isFinite(value) || value < 50) throw new Error("--thread-excerpt-chars must be >= 50")
-            return Math.floor(value)
-          },
-          describe: "Excerpt length per message embedded in threads.jsonl",
-        }),
-    async argv => {
-      let summary = buildCorpus({
-        exportDir: argv.fromExport,
-        outDir: argv.outDir,
-        chunkChars: argv.chunkChars,
-        chunkOverlapChars: argv.chunkOverlapChars,
-        maxAttachmentBytes: argv.maxAttachmentBytes,
-        maxAttachmentChars: argv.maxAttachmentChars,
-        threadExcerptChars: argv.threadExcerptChars,
-        verbose: argv.verbose,
-      })
-      console.log(JSON.stringify(summary, null, 2))
-    },
-    )
-    .command(
     "read <messageId>",
     "Read a message; returns JSON metadata or human-readable text with optional attachment download",
     y =>
@@ -1043,7 +968,7 @@ export let configureMailCli = (cli: Argv) =>
     .example("$0 export --out-dir=./exports", "Export up to 100 Primary inbox messages into per-message directories")
     .example("$0 export --out-dir=./exports --all", "Export all matched messages by removing the default cap")
     .example("$0 export --out-dir=./exports --resume", "Resume the same export using a default incremental state file")
-    .example("$0 corpus --from-export=./exports --out-dir=./corpus", "Build messages.jsonl, chunks.jsonl, and threads.jsonl from exported mail")
+
     .example("$0 export --out-dir=./exports --scope=inbox --newer-than=7d --has-attachment", "Export recent inbox messages with attachments")
     .example("$0 export --out-dir=./exports --query='from:billing@example.com' --state=./.messagemon/state/export.json", "Export matching messages incrementally using a state file")
     .example("$0 export --out-dir=./exports --jsonl-out=./exports/export.jsonl", "Append one JSONL manifest record per exported or skipped message")
@@ -1074,14 +999,14 @@ export let configureMailCli = (cli: Argv) =>
         "- `read --save-attachments=<dir>` downloads all attachments via the Gmail attachments API.",
         "- `thread` fetches all messages in a Gmail thread; use `--format=text` for a human-readable conversation view.",
         "",
-        "Export/corpus notes:",
+        "Export notes:",
         "- `export` defaults to `in:inbox category:primary` and excludes Spam/Trash unless `--include-spam-trash` is set.",
         `- \`export\` is capped at ${DEFAULT_EXPORT_MAX_MESSAGES} new exports per run by default; use \`--all\` to remove that safety cap or \`--max-messages\` to set your own cap.`,
         "- `export --query` appends raw Gmail search terms to the generated filter query.",
         "- `export --resume` reuses a default state file derived from account, query, and output directory.",
         "- `export --state` sets an explicit state file path for incremental runs.",
         "- `export --jsonl-out` appends per-message manifest records while export is in progress.",
-        "- `corpus` consumes exported message folders and writes `messages.jsonl`, `chunks.jsonl`, `threads.jsonl`, and `summary.json`.",
+
         "",
         "Modify notes:",
         "- `mark-read` removes the `UNREAD` label from the specified message id.",
@@ -1098,7 +1023,7 @@ export let configureMailCli = (cli: Argv) =>
         "- `--verbose` prints resolved credential/token paths and operation diagnostics to stderr.",
       ].join("\n"),
     )
-    .demandCommand(1, "Choose a command: search, count, thread, export, corpus, read, mark-read, archive, or send.")
+    .demandCommand(1, "Choose a command: search, count, thread, export, read, mark-read, archive, or send.")
     .strict()
     .recommendCommands()
     .help()
