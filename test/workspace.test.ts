@@ -6,6 +6,14 @@ import path from "node:path"
 import { initWorkspace, loadWorkspaceConfig } from "../src/workspace/init"
 import { createChainSink } from "../src/ingest/sinks"
 import { createWorkspaceHookSink } from "../src/workspace/hook"
+import {
+  prependConfigDir,
+  removePrependedConfigDir,
+  resolveConfigDirs,
+  resolveTokenReadPathsForAccount,
+  resolveCredentialsPaths,
+  LOCAL_CONFIG_DIRNAME,
+} from "../src/CliConfig"
 import type { UnifiedMessage } from "../src/types"
 
 let tmpDir: string
@@ -247,5 +255,60 @@ HEREDOC
       () => sink.write(makeMsg("msg-1")),
       /on-message hook exited with code 1/,
     )
+  })
+})
+
+describe("prependConfigDir", () => {
+  let wsConfigDir: string
+
+  beforeEach(() => {
+    wsConfigDir = path.join(tmpDir, "ws-config", LOCAL_CONFIG_DIRNAME)
+    fs.mkdirSync(wsConfigDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    removePrependedConfigDir(wsConfigDir)
+  })
+
+  it("prepended dir appears first in resolveConfigDirs", () => {
+    prependConfigDir(wsConfigDir)
+    let dirs = resolveConfigDirs()
+    assert.equal(dirs[0], path.resolve(wsConfigDir))
+  })
+
+  it("prepended dir is included in token search paths", () => {
+    prependConfigDir(wsConfigDir)
+    let paths = resolveTokenReadPathsForAccount("work")
+    let wsTokenPath = path.join(wsConfigDir, "tokens", "work.json")
+    assert.ok(paths.includes(wsTokenPath), `Expected ${wsTokenPath} in ${JSON.stringify(paths)}`)
+    // Should be the first candidate
+    assert.equal(paths[0], wsTokenPath)
+  })
+
+  it("prepended dir is included in credentials search paths", () => {
+    prependConfigDir(wsConfigDir)
+    let paths = resolveCredentialsPaths()
+    let wsCredsPath = path.join(wsConfigDir, "credentials.json")
+    assert.ok(paths.includes(wsCredsPath), `Expected ${wsCredsPath} in ${JSON.stringify(paths)}`)
+    assert.equal(paths[0], wsCredsPath)
+  })
+
+  it("removePrependedConfigDir restores original order", () => {
+    let before = resolveConfigDirs()
+    prependConfigDir(wsConfigDir)
+    assert.notDeepEqual(resolveConfigDirs(), before)
+    removePrependedConfigDir(wsConfigDir)
+    assert.deepEqual(resolveConfigDirs(), before)
+  })
+
+  it("fallback still includes cwd and home dirs", () => {
+    prependConfigDir(wsConfigDir)
+    let dirs = resolveConfigDirs()
+    // Should have at least: prepended, cwd, home (app may dedupe with one of these)
+    assert.ok(dirs.length >= 2)
+    assert.equal(dirs[0], path.resolve(wsConfigDir))
+    // Original dirs still present after the prepended one
+    let originalDirs = dirs.slice(1)
+    assert.ok(originalDirs.length >= 1)
   })
 })

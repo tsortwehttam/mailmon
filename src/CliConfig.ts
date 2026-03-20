@@ -14,13 +14,30 @@ export let GLOBAL_CONFIG_DIR = path.resolve(os.homedir(), ".msgmon")
 export let TOKEN_FILE_EXTENSION = ".json"
 
 // ---------------------------------------------------------------------------
-// Config directory resolution (pwd → app-install → home)
+// Config directory resolution (prepended → pwd → app-install → home)
 // ---------------------------------------------------------------------------
 
 let dedupe = (paths: string[]) => Array.from(new Set(paths.map(x => path.resolve(x))))
 
-/** Returns the three-tier config directories (pwd, app-install, home) */
-export let resolveConfigDirs = () => dedupe([PWD_CONFIG_DIR, APP_CONFIG_DIR, GLOBAL_CONFIG_DIR])
+let prependedConfigDirs: string[] = []
+
+/**
+ * Prepend a config directory to the resolution chain.
+ * Used by workspace watch to inject the workspace .msgmon/ dir
+ * so tokens/credentials there are found before the cwd fallback.
+ */
+export let prependConfigDir = (dir: string) => {
+  prependedConfigDirs.unshift(path.resolve(dir))
+}
+
+/** Remove a previously prepended config directory. */
+export let removePrependedConfigDir = (dir: string) => {
+  let resolved = path.resolve(dir)
+  prependedConfigDirs = prependedConfigDirs.filter(d => d !== resolved)
+}
+
+/** Returns the config directories in resolution order */
+export let resolveConfigDirs = () => dedupe([...prependedConfigDirs, PWD_CONFIG_DIR, APP_CONFIG_DIR, GLOBAL_CONFIG_DIR])
 
 /** Platform-specific credentials file (e.g. .msgmon/gmail/credentials.json) */
 let platformCredentialsPaths = (platform: Platform) =>

@@ -5,7 +5,8 @@ import type { Argv } from "yargs"
 import { initWorkspace, loadWorkspaceConfig } from "./init"
 import { createWorkspaceHookSink } from "./hook"
 import { createDirSink, createChainSink } from "../ingest/sinks"
-import { watch, buildDefaultStatePath } from "../ingest/ingest"
+import { watch } from "../ingest/ingest"
+import { prependConfigDir, LOCAL_CONFIG_DIRNAME } from "../CliConfig"
 import { gmailSource, markGmailRead, fetchGmailAttachment } from "../../platforms/gmail/MailSource"
 import { slackSource, markSlackRead } from "../../platforms/slack/SlackSource"
 import type { MessageSource } from "../ingest/ingest"
@@ -144,6 +145,11 @@ export let configureWorkspaceCli = (cli: Argv) =>
         let inboxDir = path.join(wsDir, "inbox")
         let accounts = config.accounts
 
+        // Prepend workspace .msgmon/ to token/credential resolution chain
+        // so tokens placed in <workspace>/.msgmon/ are found first,
+        // with fallback to cwd/.msgmon/ and ~/.msgmon/
+        prependConfigDir(path.join(wsDir, LOCAL_CONFIG_DIRNAME))
+
         let dirSink = createDirSink({
           outDir: inboxDir,
           saveAttachments: argv.saveAttachments,
@@ -171,7 +177,13 @@ export let configureWorkspaceCli = (cli: Argv) =>
           console.error(`[workspace] Warning: onMessage hook "${hookCommand}" not found, skipping hook`)
         }
 
-        let statePath = buildDefaultStatePath({ accounts, query: config.query })
+        // State file lives inside the workspace so it's self-contained
+        let stateDir = path.join(wsDir, LOCAL_CONFIG_DIRNAME, "state")
+        fs.mkdirSync(stateDir, { recursive: true })
+        let crypto = await import("node:crypto")
+        let key = JSON.stringify({ accounts: accounts.slice().sort(), query: config.query })
+        let digest = crypto.createHash("sha256").update(key).digest("hex").slice(0, 16)
+        let statePath = path.join(stateDir, `ingest-${digest}.json`)
 
         verboseLog(argv.verbose, "workspace watch", {
           workspace: wsDir,
