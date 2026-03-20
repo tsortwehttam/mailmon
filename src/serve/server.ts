@@ -29,9 +29,17 @@ import {
   SlackReadRequest,
   SlackSendRequest,
   IngestRequest,
+  DraftComposeRequest,
+  DraftIdParam,
+  DraftListRequest,
+  DraftSendRequest,
+  DraftUpdateRequest,
   AccountParam,
   type ApiResponse,
 } from "./schema"
+import { generateDraftId, saveDraft, loadDraft, listDrafts, deleteDraft } from "../draft/store"
+import { sendDraft } from "../draft/send"
+import type { Draft } from "../draft/schema"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -414,6 +422,84 @@ let createRateLimiter = (maxPerMinute: number) => {
 }
 
 // ---------------------------------------------------------------------------
+// Draft handlers
+// ---------------------------------------------------------------------------
+
+let handleDraftCompose = async (body: unknown) => {
+  let v = validate(DraftComposeRequest, body)
+  if (!v.success) return { status: 400, error: v.error }
+  let p = v.data
+  let now = new Date().toISOString()
+  let draft: Draft = { ...p, id: generateDraftId(), createdAt: now, updatedAt: now } as Draft
+  saveDraft(draft)
+  return { status: 200, data: draft }
+}
+
+let handleDraftList = async (body: unknown) => {
+  let v = validate(DraftListRequest, body)
+  if (!v.success) return { status: 400, error: v.error }
+  let drafts = listDrafts(v.data.platform)
+  return { status: 200, data: { drafts } }
+}
+
+let handleDraftShow = async (body: unknown) => {
+  let v = validate(DraftIdParam, body)
+  if (!v.success) return { status: 400, error: v.error }
+  try {
+    let draft = loadDraft(v.data.id)
+    return { status: 200, data: draft }
+  } catch (e) {
+    return { status: 404, error: (e as Error).message }
+  }
+}
+
+let handleDraftUpdate = async (body: unknown) => {
+  let v = validate(DraftUpdateRequest, body)
+  if (!v.success) return { status: 400, error: v.error }
+  let p = v.data
+  let draft: Draft
+  try {
+    draft = loadDraft(p.id)
+  } catch (e) {
+    return { status: 404, error: (e as Error).message }
+  }
+
+  if (p.label !== undefined) draft.label = p.label
+  if (p.attachments !== undefined) draft.attachments = p.attachments
+
+  if (draft.platform === "gmail") {
+    if (p.to !== undefined) draft.to = p.to
+    if (p.cc !== undefined) draft.cc = p.cc
+    if (p.bcc !== undefined) draft.bcc = p.bcc
+    if (p.subject !== undefined) draft.subject = p.subject
+    if (p.body !== undefined) draft.body = p.body
+    if (p.from !== undefined) draft.from = p.from
+    if (p.threadId !== undefined) draft.threadId = p.threadId
+    if (p.inReplyTo !== undefined) draft.inReplyTo = p.inReplyTo
+    if (p.references !== undefined) draft.references = p.references
+  } else if (draft.platform === "slack") {
+    if (p.channel !== undefined) draft.channel = p.channel
+    if (p.text !== undefined) draft.text = p.text
+    if (p.threadTs !== undefined) draft.threadTs = p.threadTs
+  }
+
+  draft.updatedAt = new Date().toISOString()
+  saveDraft(draft)
+  return { status: 200, data: draft }
+}
+
+let handleDraftDelete = async (body: unknown) => {
+  let v = validate(DraftIdParam, body)
+  if (!v.success) return { status: 400, error: v.error }
+  try {
+    deleteDraft(v.data.id)
+    return { status: 200, data: { deleted: true, id: v.data.id } }
+  } catch (e) {
+    return { status: 404, error: (e as Error).message }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Route table (built per server instance to close over opts)
 // ---------------------------------------------------------------------------
 
@@ -533,6 +619,47 @@ let buildRoutes = (opts: ServeOptions): Record<string, Handler> => {
     }
   }
 
+  let guardedDraftSend: Handler = async (body) => {
+    let v = validate(DraftSendRequest, body)
+    if (!v.success) return { status: 400, error: v.error }
+    let p = v.data
+
+    let draft: Draft
+    try {
+      draft = loadDraft(p.id)
+    } catch (e) {
+      return { status: 404, error: (e as Error).message }
+    }
+
+    // Rate limit
+    let rl = rateLimiter.check()
+    if (!rl.allowed) {
+      return { status: 429, error: `Rate limit exceeded (${opts.sendRateLimit}/min). Retry after ${Math.ceil(rl.retryAfterMs / 1000)}s.` }
+    }
+
+    // Apply send filtering
+    if (draft.platform === "gmail") {
+      let to = filterGmailRecipients([draft.to], opts.gmailAllowTo)
+      let cc = filterGmailRecipients(draft.cc, opts.gmailAllowTo)
+      let bcc = filterGmailRecipients(draft.bcc, opts.gmailAllowTo)
+      if (to.length === 0 && cc.length === 0 && bcc.length === 0) {
+        return { status: 400, error: "No allowed recipients remain after filtering. Check --gmail-allow-to." }
+      }
+    } else if (draft.platform === "slack") {
+      if (!isSlackChannelAllowed(draft.channel, opts.slackAllowChannels)) {
+        return { status: 400, error: `Channel "${draft.channel}" is not in --slack-allow-channels.` }
+      }
+    }
+
+    try {
+      let result = await sendDraft(draft)
+      if (!p.keep) deleteDraft(draft.id)
+      return { status: 200, data: { sent: true, draftId: draft.id, deleted: !p.keep, result } }
+    } catch (e) {
+      return { status: 500, error: (e as Error).message }
+    }
+  }
+
   return {
     "POST /api/gmail/search": handleGmailSearch,
     "POST /api/gmail/count": handleGmailCount,
@@ -547,6 +674,12 @@ let buildRoutes = (opts: ServeOptions): Record<string, Handler> => {
     "POST /api/slack/send": guardedSlackSend,
     "POST /api/slack/accounts": handleSlackAccounts,
     "POST /api/ingest": handleIngest,
+    "POST /api/draft/compose": handleDraftCompose,
+    "POST /api/draft/list": handleDraftList,
+    "POST /api/draft/show": handleDraftShow,
+    "POST /api/draft/update": handleDraftUpdate,
+    "POST /api/draft/send": guardedDraftSend,
+    "POST /api/draft/delete": handleDraftDelete,
   }
 }
 
@@ -626,7 +759,7 @@ export let startServer = (opts: ServeOptions) =>
     server.on("error", reject)
     server.listen(opts.port, opts.host, () => {
       console.log(`[msgmon] server listening on http://${opts.host}:${opts.port}`)
-      console.log(`[msgmon] 13 routes registered`)
+      console.log(`[msgmon] 19 routes registered`)
       if (opts.gmailAllowTo.length) console.log(`[msgmon] gmail-allow-to: ${opts.gmailAllowTo.join(", ")}`)
       if (opts.slackAllowChannels.length) console.log(`[msgmon] slack-allow-channels: ${opts.slackAllowChannels.join(", ")}`)
       if (opts.sendRateLimit > 0) console.log(`[msgmon] send-rate-limit: ${opts.sendRateLimit}/min`)

@@ -91,6 +91,28 @@ msgmon watch --sink=dir --out-dir=/data/inbox --save-attachments --interval-ms=1
 msgmon watch --sink=exec --exec-cmd='./agent.sh' --mark-read
 ```
 
+### `msgmon draft`
+
+Platform-agnostic draft management. Compose messages targeting any platform, review them, and send when ready. Drafts are stored locally as JSON files at `.msgmon/drafts/`.
+
+```bash
+# Compose a gmail draft (reply to a thread)
+msgmon draft compose --platform=gmail --to=alice@example.com --subject="Re: Project" \
+  --body="Sounds good" --thread-id=18f3a... --in-reply-to="<abc@example.com>"
+
+# Compose a slack draft
+msgmon draft compose --platform=slack --channel='#general' --text="Weekly update" --attach=./report.pdf
+
+# List, show, edit, send, delete
+msgmon draft list --format=text
+msgmon draft show <id>
+msgmon draft edit <id> --body="Updated body"
+msgmon draft send <id> --yes
+msgmon draft delete <id>
+```
+
+Draft IDs support prefix matching — `msgmon draft show abc` matches a draft whose ID starts with `abc`.
+
 ### `msgmon corpus`
 
 Build an LLM-oriented corpus from ingested message directories. Platform-agnostic.
@@ -135,6 +157,12 @@ Every request must include the header `X-Auth-Token: <token>`. All endpoints acc
 | `POST /api/slack/send` | Post a message (`{ channel, text?, account?, threadTs?, asUser?, attachments? }`) |
 | `POST /api/slack/accounts` | List Slack workspaces (`{}`) |
 | `POST /api/ingest` | One-shot ingest (`{ accounts?, query?, maxResults?, markRead?, seed? }`) |
+| `POST /api/draft/compose` | Create a draft (`{ platform, to\|channel, ... }`) |
+| `POST /api/draft/list` | List drafts (`{ platform? }`) |
+| `POST /api/draft/show` | Show a draft (`{ id }`) |
+| `POST /api/draft/update` | Update draft fields (`{ id, ...fields }`) |
+| `POST /api/draft/send` | Send a draft (`{ id, keep? }`) |
+| `POST /api/draft/delete` | Delete a draft (`{ id }`) |
 | `GET /api/health` | Health check (returns `{ status: "ok", uptime }`) |
 
 **Attachments** (for `/api/gmail/send` and `/api/slack/send`): pass an `attachments` array in the JSON body. Each attachment is `{ filename, data, contentType? }` where `data` is base64-encoded file content. Slack file uploads require the `files:write` bot/user scope.

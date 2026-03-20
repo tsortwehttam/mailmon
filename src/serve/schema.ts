@@ -113,6 +113,76 @@ export let IngestRequest = z.object({
 export type IngestRequest = z.infer<typeof IngestRequest>
 
 // ---------------------------------------------------------------------------
+// Draft
+// ---------------------------------------------------------------------------
+
+export let DraftComposeGmailRequest = z.object({
+  platform: z.literal("gmail"),
+  account: z.string().default("default"),
+  label: z.string().optional(),
+  to: z.string().min(1, "to is required"),
+  cc: z.array(z.string()).default([]),
+  bcc: z.array(z.string()).default([]),
+  subject: z.string().default(""),
+  body: z.string().default(""),
+  from: z.string().optional(),
+  replyTo: z.string().optional(),
+  threadId: z.string().optional(),
+  inReplyTo: z.string().optional(),
+  references: z.string().optional(),
+  messageId: z.string().optional(),
+  attachments: z.array(Attachment).default([]),
+})
+
+export let DraftComposeSlackRequest = z.object({
+  platform: z.literal("slack"),
+  account: z.string().default("default"),
+  label: z.string().optional(),
+  channel: z.string().min(1, "channel is required"),
+  text: z.string().default(""),
+  threadTs: z.string().optional(),
+  asUser: z.boolean().default(true),
+  attachments: z.array(Attachment).default([]),
+})
+
+export let DraftComposeRequest = z.discriminatedUnion("platform", [
+  DraftComposeGmailRequest,
+  DraftComposeSlackRequest,
+])
+export type DraftComposeRequest = z.infer<typeof DraftComposeRequest>
+
+export let DraftIdParam = z.object({
+  id: z.string().min(1, "id is required"),
+})
+
+export let DraftListRequest = z.object({
+  platform: z.enum(["gmail", "slack"]).optional(),
+})
+
+export let DraftSendRequest = z.object({
+  id: z.string().min(1, "id is required"),
+  keep: z.boolean().default(false),
+})
+
+export let DraftUpdateRequest = z.object({
+  id: z.string().min(1, "id is required"),
+  label: z.string().optional(),
+  to: z.string().optional(),
+  cc: z.array(z.string()).optional(),
+  bcc: z.array(z.string()).optional(),
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  from: z.string().optional(),
+  channel: z.string().optional(),
+  text: z.string().optional(),
+  threadId: z.string().optional(),
+  threadTs: z.string().optional(),
+  inReplyTo: z.string().optional(),
+  references: z.string().optional(),
+  attachments: z.array(Attachment).optional(),
+})
+
+// ---------------------------------------------------------------------------
 // API response envelope
 // ---------------------------------------------------------------------------
 

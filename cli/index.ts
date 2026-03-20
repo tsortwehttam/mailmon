@@ -9,10 +9,11 @@ import { parseSlackCli } from "../platforms/slack"
 import { parseTeamsCli } from "../platforms/teams"
 import { parseWhatsAppCli } from "../platforms/whatsapp"
 import { parseServeCli } from "../src/serve/cli"
+import { parseDraftCli } from "../src/draft/cli"
 import { verboseLog } from "../src/Verbose"
 
 let args = hideBin(process.argv)
-let subcommands = new Set(["gmail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus", "serve", "help"])
+let subcommands = new Set(["gmail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus", "serve", "draft", "help"])
 let verbose = args.includes("--verbose") || args.includes("-v")
 let commandIndex = args.findIndex(x => !x.startsWith("-"))
 let command = commandIndex >= 0 ? args[commandIndex] : undefined
@@ -34,6 +35,7 @@ let cli = yargs(args)
   .command("watch", "Daemon: continuously ingest new messages across accounts, emit to sink as they arrive")
   .command("corpus", "Build LLM-oriented corpus (messages.jsonl, chunks.jsonl, threads.jsonl) from ingested messages")
   .command("serve", "HTTP API server: proxies all commands with token auth")
+  .command("draft", "Compose, list, send, edit, and delete message drafts")
   .command("slack", "Slack: auth, search, read, send messages")
   .command("teams", "Teams: search, read, send messages (planned)")
   .command("whatsapp", "WhatsApp: read, send messages (planned)")
@@ -44,7 +46,7 @@ let cli = yargs(args)
       y
         .positional("platform", {
           type: "string",
-          choices: ["gmail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus", "serve"] as const,
+          choices: ["gmail", "slack", "teams", "whatsapp", "ingest", "watch", "corpus", "serve", "draft"] as const,
           describe: "Platform or command to show help for",
         })
         .positional("command", {
@@ -65,6 +67,7 @@ let cli = yargs(args)
       if (argv.platform === "slack") return parseSlackCli(helpArgs, "msgmon slack")
       if (argv.platform === "teams") return parseTeamsCli(helpArgs, "msgmon teams")
       if (argv.platform === "whatsapp") return parseWhatsAppCli(helpArgs, "msgmon whatsapp")
+      if (argv.platform === "draft") return parseDraftCli(helpArgs, "msgmon draft")
     },
   )
   .example("$0 help", "Show top-level help")
@@ -86,6 +89,7 @@ let cli = yargs(args)
       "  watch     — Continuous multi-account daemon. Emits UnifiedMessage as they arrive.",
       "  corpus    — Build LLM corpus from ingested message directories.",
       "  serve     — HTTP API server with token auth (proxies all commands).",
+      "  draft     — Compose, list, send, edit, and delete message drafts.",
       "",
       "Platforms:",
       "  slack     — Slack via @slack/web-api",
@@ -247,6 +251,17 @@ else if (!dispatched && command === "whatsapp") {
 }
 
 // ---------------------------------------------------------------------------
+// Draft — compose, list, send, edit, delete message drafts
+// ---------------------------------------------------------------------------
+
+else if (!dispatched && command === "draft") {
+  parseDraftCli([...forwardedVerboseArgs, ...commandArgs], "msgmon draft").catch(e => {
+    console.error(e?.message ?? e)
+    process.exit(1)
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Help
 // ---------------------------------------------------------------------------
 
@@ -272,6 +287,8 @@ else if (!dispatched && command === "help") {
     parseTeamsCli([...forwardedVerboseArgs, "--help"], "msgmon teams")
   } else if (subhelp === "whatsapp") {
     parseWhatsAppCli([...forwardedVerboseArgs, "--help"], "msgmon whatsapp")
+  } else if (subhelp === "draft") {
+    parseDraftCli([...forwardedVerboseArgs, "--help"], "msgmon draft")
   } else {
     cli.parseAsync().catch(e => {
       console.error(e?.message ?? e)
