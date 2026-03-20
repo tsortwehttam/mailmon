@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url"
 import { google, type gmail_v1 } from "googleapis"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../src/CliConfig"
-import { buildRunDirName, exportMessageArtifacts, headerMap } from "../src/MessageExport"
+import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../../src/CliConfig"
+import { buildRunDirName, exportMessageArtifacts, headerMap } from "./MessageExport"
 import type { Argv } from "yargs"
-import { verboseLog } from "../src/Verbose"
+import { verboseLog } from "../../src/Verbose"
 
 type MonitorState = {
   processed: Record<string, string>
@@ -121,16 +121,16 @@ let runMonitor = async (params: {
       }
 
       let task = [
-        "# Mailmon Task",
+        "# Messagemon Task",
         "",
-        "You are processing one Gmail message exported by `mailmon monitor`.",
+        "You are processing one Gmail message exported by `messagemon mail monitor`.",
         "Available artifacts in this directory:",
         "- `message.json` (full Gmail message payload)",
         "- `headers.json`",
         "- `body.txt` and/or `body.html`",
         "- `attachments/`",
         "",
-        "You can invoke `mailmon` as needed for follow-up actions.",
+        "You can invoke `messagemon` as needed for follow-up actions.",
         "",
         "## User Prompt",
         promptText || "(No prompt provided)",
@@ -140,10 +140,11 @@ let runMonitor = async (params: {
 
       verboseLog(params.verbose, "running agent", { messageId: ref.id, runDir, command: params.agentCmd })
       await runAgent(params.agentCmd, runDir, {
-        MAILMON_RUN_DIR: runDir,
-        MAILMON_MESSAGE_ID: ref.id,
-        MAILMON_THREAD_ID: msg.threadId ?? "",
-        MAILMON_ACCOUNT: params.account,
+        MESSAGEMON_RUN_DIR: runDir,
+        MESSAGEMON_MESSAGE_ID: ref.id,
+        MESSAGEMON_THREAD_ID: msg.threadId ?? "",
+        MESSAGEMON_ACCOUNT: params.account,
+        MESSAGEMON_PLATFORM: "mail",
       })
 
       if (params.markRead) {
@@ -181,7 +182,7 @@ export let configureMonitorCli = (cli: Argv) =>
     .option("account", {
       type: "string",
       default: DEFAULT_ACCOUNT,
-      describe: "Token account name (uses .mailmon/tokens/<account>.json)",
+      describe: "Token account name (uses .messagemon/mail/tokens/<account>.json)",
     })
     .option("query", {
       type: "string",
@@ -225,13 +226,13 @@ export let configureMonitorCli = (cli: Argv) =>
     })
     .option("work-root", {
       type: "string",
-      default: path.resolve(os.tmpdir(), "mailmon"),
+      default: path.resolve(os.tmpdir(), "messagemon"),
       describe: "Root directory where per-message run directories are created",
     })
     .option("state", {
       type: "string",
       default: "",
-      describe: "Path to JSON file tracking processed message ids (default: ./.mailmon/state/monitor-<account>.json)",
+      describe: "Path to JSON file tracking processed message ids (default: ./.messagemon/state/monitor-<account>.json)",
     })
     .option("mark-read", {
       type: "boolean",
@@ -277,7 +278,7 @@ export let parseMonitorCli = (args: string[], scriptName = "monitor") =>
         workRoot: path.resolve(argv.workRoot),
         statePath: argv.state
           ? path.resolve(argv.state)
-          : path.resolve(process.cwd(), ".mailmon", "state", `monitor-${argv.account}.json`),
+          : path.resolve(process.cwd(), ".messagemon", "state", `monitor-${argv.account}.json`),
         markRead: argv.markRead,
         verbose: argv.verbose,
       }),

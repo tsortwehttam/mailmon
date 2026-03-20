@@ -3,9 +3,9 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import { TOKEN_FILE_EXTENSION, resolveAllTokenDirs } from "../src/CliConfig"
+import { TOKEN_FILE_EXTENSION, resolveAllTokenDirs } from "../../src/CliConfig"
 import type { Argv } from "yargs"
-import { verboseLog } from "../src/Verbose"
+import { verboseLog } from "../../src/Verbose"
 
 let listAccounts = () => {
   let all = new Set<string>()
@@ -41,7 +41,7 @@ export let configureAccountsCli = (cli: Argv) =>
     .epilog(
       [
         "Output contract:",
-        "- json: array of account names derived from `./.mailmon/tokens/*.json`, `<mailmon-install-dir>/.mailmon/tokens/*.json`, and `~/.mailmon/tokens/*.json`.",
+        "- json: array of account names derived from `./.messagemon/mail/tokens/*.json`, `<install-dir>/.messagemon/mail/tokens/*.json`, and `~/.messagemon/mail/tokens/*.json`.",
         "- text: one account name per line.",
       ].join("\n"),
     )

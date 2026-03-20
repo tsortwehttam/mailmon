@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url"
 import { google } from "googleapis"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../src/CliConfig"
+import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../../src/CliConfig"
 import type { Argv } from "yargs"
-import { verboseLog } from "../src/Verbose"
+import { verboseLog } from "../../src/Verbose"
 
 let loadOAuth = (account: string, verbose = false) => {
   let credentialsPath = resolveCredentialsPath()
@@ -97,7 +97,7 @@ export let configurePollCli = (cli: Argv) =>
     .option("account", {
       type: "string",
       default: DEFAULT_ACCOUNT,
-      describe: "Token account name (uses .mailmon/tokens/<account>.json)",
+      describe: "Token account name (uses .messagemon/mail/tokens/<account>.json)",
     })
     .option("interval-ms", {
       type: "number",

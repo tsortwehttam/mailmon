@@ -10,9 +10,9 @@ import {
   resolveCredentialsPath,
   resolveTokenWriteDir,
   resolveTokenWritePathForAccount,
-} from "../src/CliConfig"
+} from "../../src/CliConfig"
 import type { Argv } from "yargs"
-import { verboseLog } from "../src/Verbose"
+import { verboseLog } from "../../src/Verbose"
 
 let authForAccount = async (account: string, verbose = false) => {
   let credentialsPath = resolveCredentialsPath()
@@ -32,7 +32,7 @@ export let configureAuthCli = (cli: Argv) =>
     .option("account", {
       type: "string",
       default: DEFAULT_ACCOUNT,
-      describe: "Token account name (writes .mailmon/tokens/<account>.json)",
+      describe: "Token account name (writes .messagemon/mail/tokens/<account>.json)",
     })
     .option("verbose", {
       alias: "v",
@@ -40,14 +40,14 @@ export let configureAuthCli = (cli: Argv) =>
       default: false,
       describe: "Print diagnostic details to stderr",
     })
-    .example("$0 --account=personal", "Run OAuth and save token to .mailmon/tokens/personal.json")
+    .example("$0 --account=personal", "Run OAuth and save token to .messagemon/mail/tokens/personal.json")
     .epilog(
       [
         "Output:",
         "- Prints `Saved <absolute token path>` on success.",
         "- The token file is used by `mail` commands via the same `--account` value.",
-        "- Reads credentials from `./.mailmon/credentials.json`, then `<mailmon-install-dir>/.mailmon/credentials.json`, then `~/.mailmon/credentials.json`.",
-        "- Writes token to `./.mailmon/tokens/` in the current working directory.",
+        "- Reads credentials from `./.messagemon/mail/credentials.json`, then `<install-dir>/.messagemon/mail/credentials.json`, then `~/.messagemon/mail/credentials.json` (also checks legacy `.messagemon/credentials.json`).",
+        "- Writes token to `./.messagemon/mail/tokens/` in the current working directory.",
       ].join("\n"),
     )
     .strict()

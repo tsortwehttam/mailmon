@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url"
 import { google } from "googleapis"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../src/CliConfig"
-import { buildCorpus } from "../src/CorpusBuilder"
-import { buildRunDirName, collectAttachments, decodeBase64Url, exportMessageArtifacts, headerMap, pickBody } from "../src/MessageExport"
+import { DEFAULT_ACCOUNT, resolveCredentialsPath, resolveTokenReadPathForAccount } from "../../src/CliConfig"
+import { buildCorpus } from "./CorpusBuilder"
+import { buildRunDirName, collectAttachments, decodeBase64Url, exportMessageArtifacts, headerMap, pickBody } from "./MessageExport"
 import type { Argv } from "yargs"
-import { verboseLog } from "../src/Verbose"
+import { verboseLog } from "../../src/Verbose"
 
 let loadOAuth = (account: string, verbose = false) => {
   let credentialsPath = resolveCredentialsPath()
@@ -181,7 +181,7 @@ let buildDefaultExportStatePath = (params: { account: string; query: string; out
     outDir: params.outDir,
   })
   let digest = crypto.createHash("sha256").update(key).digest("hex").slice(0, 16)
-  return path.resolve(process.cwd(), ".mailmon", "state", `export-${params.account}-${digest}.json`)
+  return path.resolve(process.cwd(), ".messagemon", "state", `export-${params.account}-${digest}.json`)
 }
 
 let buildExportQuery = (params: {
@@ -278,7 +278,7 @@ let buildRawMessage = (params: {
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: ${normalizeMessageId(params.messageId) ?? buildMessageId(params.from)}`,
     "MIME-Version: 1.0",
-    "X-Mailer: mailmon/1.0",
+    "X-Mailer: messagemon/1.0",
   ]
 
   if (params.attach.length === 0) {
@@ -288,7 +288,7 @@ let buildRawMessage = (params: {
     )
   }
 
-  let boundary = `mailmon_${Date.now()}_${Math.random().toString(36).slice(2)}`
+  let boundary = `messagemon_${Date.now()}_${Math.random().toString(36).slice(2)}`
   let parts = [
     `--${boundary}\r\nContent-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n${encodeQuotedPrintable(params.body)}\r\n`,
     ...params.attach.map(filePath => {
@@ -314,7 +314,7 @@ export let configureMailCli = (cli: Argv) =>
     .option("account", {
       type: "string",
       default: DEFAULT_ACCOUNT,
-      describe: "Token account name (uses .mailmon/tokens/<account>.json)",
+      describe: "Token account name (uses .messagemon/mail/tokens/<account>.json)",
     })
     .option("verbose", {
       alias: "v",
@@ -1045,7 +1045,7 @@ export let configureMailCli = (cli: Argv) =>
     .example("$0 export --out-dir=./exports --resume", "Resume the same export using a default incremental state file")
     .example("$0 corpus --from-export=./exports --out-dir=./corpus", "Build messages.jsonl, chunks.jsonl, and threads.jsonl from exported mail")
     .example("$0 export --out-dir=./exports --scope=inbox --newer-than=7d --has-attachment", "Export recent inbox messages with attachments")
-    .example("$0 export --out-dir=./exports --query='from:billing@example.com' --state=./.mailmon/state/export.json", "Export matching messages incrementally using a state file")
+    .example("$0 export --out-dir=./exports --query='from:billing@example.com' --state=./.messagemon/state/export.json", "Export matching messages incrementally using a state file")
     .example("$0 export --out-dir=./exports --jsonl-out=./exports/export.jsonl", "Append one JSONL manifest record per exported or skipped message")
     .example("$0 read 190cf9f55b05efcc", "Read metadata for one Gmail message id")
     .example("$0 read 190cf9f55b05efcc --format=text", "Read a message with decoded headers and body text")
@@ -1087,7 +1087,7 @@ export let configureMailCli = (cli: Argv) =>
         "- `mark-read` removes the `UNREAD` label from the specified message id.",
         "- `archive` removes the `INBOX` label from the specified message id.",
         "- Requires OAuth scope `https://www.googleapis.com/auth/gmail.modify`.",
-        "- If your existing token predates this scope, rerun `mailmon auth --account=<name>`.",
+        "- If your existing token predates this scope, rerun `messagemon mail auth --account=<name>`.",
         "",
         "Send behavior notes:",
         "- `--yes` is required to send (safety flag).",
