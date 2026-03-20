@@ -1,9 +1,12 @@
 node_modules
-credentials.json
 .DS_Store
 *.log
 .env
 .env.*
-tokens/*
+
+# Credentials and tokens (all platform layouts)
+credentials.json
+tokens/
+**/tokens/*.json
 .messagemon/
 .mailmon/

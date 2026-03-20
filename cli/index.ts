@@ -32,7 +32,7 @@ let cli = yargs(args)
   .command("ingest", "One-shot: ingest new messages across accounts, emit to sink, then exit (cron-friendly)")
   .command("watch", "Daemon: continuously ingest new messages across accounts, emit to sink as they arrive")
   .command("corpus", "Build LLM-oriented corpus (messages.jsonl, chunks.jsonl, threads.jsonl) from ingested messages")
-  .command("slack", "Slack: search, read, send messages (planned)")
+  .command("slack", "Slack: auth, search, read, send messages")
   .command("teams", "Teams: search, read, send messages (planned)")
   .command("whatsapp", "WhatsApp: read, send messages (planned)")
   .command(
@@ -83,10 +83,10 @@ let cli = yargs(args)
       "  watch     — Continuous multi-account daemon. Emits UnifiedMessage as they arrive.",
       "  corpus    — Build LLM corpus from ingested message directories.",
       "",
-      "Platforms (planned):",
+      "Platforms:",
       "  slack     — Slack via @slack/web-api",
-      "  teams     — Microsoft Teams via Graph API",
-      "  whatsapp  — WhatsApp via Cloud API",
+      "  teams     — Microsoft Teams via Graph API (planned)",
+      "  whatsapp  — WhatsApp via Cloud API (planned)",
       "",
       "Sinks (for ingest/watch):",
       "  ndjson    — One JSON line per message to stdout (pipe-friendly)",

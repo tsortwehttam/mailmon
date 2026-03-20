@@ -1,13 +1,14 @@
 {
   "name": "messagemon",
   "version": "2.0.0",
-  "main": "index.js",
+  "type": "module",
   "bin": {
     "messagemon": "bin/messagemon.mjs"
   },
   "license": "MIT",
   "scripts": {
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
