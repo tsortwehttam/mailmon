@@ -5,6 +5,7 @@ import { ingestOnce, watch, buildDefaultStatePath } from "./ingest"
 import { createNdjsonSink, createDirSink, createExecSink } from "./sinks"
 import type { Sink } from "./sinks"
 import { mailSource, markMailRead, fetchMailAttachment } from "../../platforms/mail/MailSource"
+import { slackSource, markSlackRead } from "../../platforms/slack/SlackSource"
 import type { MessageSource } from "./ingest"
 import type { UnifiedMessage } from "../types"
 import { verboseLog } from "../Verbose"
@@ -50,9 +51,27 @@ let buildSink = (argv: {
 }
 
 let resolveSources = (accounts: string[]): Array<{ source: MessageSource; accounts: string[] }> => {
-  // Currently only mail is implemented. When other platforms land, this will
-  // dispatch based on account naming convention or explicit --platform flag.
-  return [{ source: mailSource, accounts }]
+  // Dispatch based on account prefix: "slack:workspace" → Slack, plain name → mail.
+  let mailAccounts: string[] = []
+  let slackAccounts: string[] = []
+
+  for (let account of accounts) {
+    if (account.startsWith("slack:")) {
+      slackAccounts.push(account.slice("slack:".length))
+    } else {
+      mailAccounts.push(account)
+    }
+  }
+
+  let sources: Array<{ source: MessageSource; accounts: string[] }> = []
+  if (mailAccounts.length) sources.push({ source: mailSource, accounts: mailAccounts })
+  if (slackAccounts.length) sources.push({ source: slackSource, accounts: slackAccounts })
+  return sources
+}
+
+let resolveMarkRead = (msg: UnifiedMessage, account: string) => {
+  if (msg.platform === "slack") return markSlackRead(msg, account)
+  return markMailRead(msg, account)
 }
 
 let sharedOptions = (y: Argv) =>
@@ -150,7 +169,7 @@ export let configureIngestCli = (cli: Argv) =>
           maxResults: argv.maxResults,
           sink,
           statePath,
-          markRead: markMailRead,
+          markRead: resolveMarkRead,
           doMarkRead: argv.markRead,
           verbose: argv.verbose,
         })
@@ -236,7 +255,7 @@ export let configureWatchCli = (cli: Argv) =>
           maxResults: argv.maxResults,
           sink,
           statePath,
-          markRead: markMailRead,
+          markRead: resolveMarkRead,
           doMarkRead: argv.markRead,
           verbose: argv.verbose,
           intervalMs: argv.intervalMs,

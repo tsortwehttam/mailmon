@@ -1,6 +1,6 @@
 # messagemon
 
-Multi-account message ingestion CLI. Currently supports Gmail; Slack, Teams, and WhatsApp adapters are planned.
+Multi-account message ingestion CLI. Supports Gmail and Slack; Teams and WhatsApp adapters are planned.
 
 ## Install
 
@@ -34,6 +34,38 @@ messagemon mail search "in:inbox is:unread" --account=personal
 ```
 
 The tool requests scopes: `gmail.readonly`, `gmail.modify`, `gmail.send`.
+
+## Slack Setup
+
+### Option A: Bot token (simplest)
+
+1. Create a Slack app at https://api.slack.com/apps.
+2. Under **OAuth & Permissions**, add bot scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `mpim:history`, `users:read`, `chat:write`.
+3. Install the app to your workspace and copy the **Bot User OAuth Token** (`xoxb-...`).
+4. Store it:
+
+```bash
+messagemon slack auth --token=xoxb-... --account=myworkspace
+```
+
+### Option B: OAuth (enables send-as-user and search)
+
+1. Save your app's `client_id` and `client_secret` to `.messagemon/slack/credentials.json`:
+   ```json
+   { "client_id": "...", "client_secret": "..." }
+   ```
+2. Run the OAuth flow:
+   ```bash
+   messagemon slack auth --mode=oauth --account=myworkspace
+   ```
+3. This stores both a bot token and a user token. The user token enables `search` and sending messages as yourself.
+
+### Verify
+
+```bash
+messagemon slack accounts --format=text
+messagemon slack read '#general' 1234567890.123456 --account=myworkspace
+```
 
 ## Commands
 
@@ -108,6 +140,29 @@ Direct Gmail operations. All subcommands accept `--account` and `--verbose`.
 | `mail mark-read <id>` | Remove UNREAD label |
 | `mail archive <id>` | Remove INBOX label |
 
+### `messagemon slack`
+
+Direct Slack operations. All subcommands accept `--account` and `--verbose`.
+
+| Subcommand | Description |
+|------------|-------------|
+| `slack auth` | Store bot token (`--mode=bot`, default) or run OAuth (`--mode=oauth`) |
+| `slack accounts` | List configured Slack workspaces |
+| `slack search <query>` | Search messages (requires user token with `search:read`) |
+| `slack read <channel> <ts>` | Read a single message by channel + timestamp |
+| `slack send` | Post a message: `--channel`, `--text`, `--as-user`, `--thread-ts` |
+
+### Multi-platform ingest/watch
+
+Prefix account names with `slack:` to route to the Slack adapter:
+
+```bash
+messagemon ingest --account=default --account=slack:myworkspace --query='#general'
+messagemon watch --account=slack:myworkspace --query='#general,#engineering' --sink=ndjson
+```
+
+For Slack, `--query` accepts comma-separated channel names or IDs (e.g. `#general`, `C01ABC`).
+
 ## Configuration
 
 Credentials and tokens are resolved in priority order:
@@ -116,7 +171,9 @@ Credentials and tokens are resolved in priority order:
 2. `<install-dir>/.messagemon/mail/credentials.json`
 3. `~/.messagemon/mail/credentials.json`
 
-Tokens are read from `<dir>/mail/tokens/<account>.json` across all three locations. `mail auth` writes tokens to `./.messagemon/mail/tokens/`.
+Tokens are read from `<dir>/<platform>/tokens/<account>.json` across all three locations. Auth commands write tokens to `./.messagemon/<platform>/tokens/`.
+
+Slack tokens are stored at `.messagemon/slack/tokens/<account>.json` and contain `bot_token` (always) and optionally `user_token` (from OAuth).
 
 ## Architecture
 
@@ -124,7 +181,8 @@ Tokens are read from `<dir>/mail/tokens/<account>.json` across all three locatio
 messagemon ingest / watch
   │
   ├─ MessageSource (async generator per platform)
-  │   └─ mailSource → toUnifiedMessage()
+  │   ├─ mailSource → toUnifiedMessage()
+  │   └─ slackSource → toUnifiedMessage()
   │
   ├─ Ingest core (multi-account fan-out, state dedup)
   │
@@ -139,6 +197,24 @@ messagemon corpus
 ```
 
 All output uses `UnifiedMessage` — a platform-agnostic envelope defined in `src/types.ts`.
+
+## Adding a new platform
+
+Every platform adapter must satisfy these constraints:
+
+1. **Implement `MessageSource`** (`src/ingest/ingest.ts`). The interface is a single method `listMessages()` returning an `AsyncGenerator<UnifiedMessage>`. This is the only contract the ingest/watch pipeline requires.
+
+2. **Convert to `UnifiedMessage`**. Each platform needs a `toUnifiedMessage()` that maps its native message shape to the unified envelope in `src/types.ts`. Add a corresponding `PlatformMetadata` variant to the discriminated union.
+
+3. **Credential layout**. Follow the three-tier resolution pattern (`pwd → app-install → home`): `.messagemon/<platform>/credentials.json` for app config, `.messagemon/<platform>/tokens/<account>.json` for per-account tokens. Use the helpers in `src/CliConfig.ts` with the `platform` parameter.
+
+4. **Account dispatch**. Register the new source in `resolveSources()` in `src/ingest/cli.ts`. The convention is `<platform>:<account-name>` (e.g. `slack:myworkspace`). Plain names default to mail for backward compatibility.
+
+5. **CLI subcommands**. Provide at minimum: `auth` (store credentials), `accounts` (list configured accounts), `read` (fetch a single message), `send` (post a message). Wire them in `platforms/<platform>/index.ts` and register the yargs command in `cli/index.ts`.
+
+6. **Mark-read**. Implement a `markRead(msg, account)` function and add it to `resolveMarkRead()` in `src/ingest/cli.ts`. If the platform has no read-marking concept, make it a no-op.
+
+7. **Message ID**. Must be stable and unique within the platform scope. Used as the dedup key in the ingest state file.
 
 ## Testing
 
