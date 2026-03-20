@@ -2,36 +2,96 @@
 
 ## Key design decisions
 
-### Auth approach
-Use **bot tokens** (`xoxb-`) stored in `.messagemon/slack/tokens/<account>.json`.
-No OAuth flow — user manually creates a Slack app, installs to workspace, copies the bot token.
-This is simpler and more reliable than OAuth for CLI tools. The `auth` command will
-prompt for a token string and save it (like a `configure` step, not a browser flow).
+### Auth: dual-mode (bot token + OAuth)
 
-### Required Slack app scopes
-- `channels:history` — read public channel messages
-- `channels:read` — list public channels
-- `groups:history` — read private channel messages (optional)
-- `groups:read` — list private channels (optional)
-- `im:history` — read DMs (optional)
-- `mpim:history` — read group DMs (optional)
+Support **two** token types in the same token file:
+
+```jsonc
+// .messagemon/slack/tokens/<account>.json
+{
+  "bot_token": "xoxb-...",       // always present — bot token from Slack app
+  "user_token": "xoxp-...",      // optional — obtained via OAuth, enables acting as user
+  "team_id": "T01234ABC",
+  "team_name": "My Workspace"
+}
+```
+
+**`slack auth --mode=bot`** (default, simpler path):
+- Prompts for bot token string (user copies from Slack app settings)
+- Validates via `auth.test`, saves to token file
+- Sufficient for: reading channels, listing channels, posting as bot
+
+**`slack auth --mode=oauth`** (richer path):
+- Reads `credentials.json` (client_id, client_secret) from `.messagemon/slack/`
+- Starts local HTTP server, opens browser for Slack OAuth v2 install flow
+- Exchanges code for both bot + user tokens
+- Saves both to token file
+- Required for: sending as user, `search.messages`, future live listening (Socket Mode)
+
+The `SlackSource` and CLI commands pick the right token for each operation:
+- `conversations.history`, `conversations.list`, `users.info` → bot_token
+- `chat.postMessage` → user_token if available, falls back to bot_token
+- `search.messages` → user_token (error if not available)
+
+### Required scopes
+
+**Bot scopes** (requested during OAuth, documented for manual setup):
+- `channels:history`, `channels:read` — public channels
+- `groups:history`, `groups:read` — private channels
+- `im:history`, `mpim:history` — DMs
 - `users:read` — resolve user IDs to names
+- `chat:write` — post messages as bot
+
+**User scopes** (requested during OAuth only):
+- `search:read` — search messages
+- `chat:write` — post messages as user
+
+### "New" / unread message strategy
+
+Slack has no per-message "unread" flag like email's UNREAD label. Three strategies,
+all supported, selectable via `--new-strategy`:
+
+1. **`state`** (default) — Use ingest state file (same as mail).
+   A message is "new" if its ID (`channel:ts`) isn't in the state file.
+   Works great for polling: first run captures recent history, subsequent runs
+   only emit messages with newer timestamps. The `listMessages` generator
+   fetches messages in reverse-chronological order (Slack's default) and stops
+   when it hits an already-seen message OR exceeds maxResults.
+
+2. **`oldest`** — Timestamp-based watermark. Track the newest `ts` seen per
+   channel in state. On next poll, pass `oldest=last_seen_ts` to
+   `conversations.history`. More efficient (fewer API calls) but coupled to
+   a single channel — good for watch mode on specific channels.
+
+3. **`mark`** — Use Slack's `conversations.mark` to track read position
+   (mirrors how the Slack client works). After processing messages, call
+   `conversations.mark` to advance the cursor. On next poll, use
+   `conversations.history` with `oldest=` set to the marked position.
+   Requires `channels:history` scope (already included). This is the closest
+   analog to marking mail as read.
+
+For `markRead` integration in `ingest.ts`:
+- `state` strategy: no-op (state file handles dedup)
+- `oldest` strategy: update watermark in state
+- `mark` strategy: call `conversations.mark`
 
 ### Query model
-Slack has no Gmail-style query syntax. Instead, `--query` will accept a
-**channel name or ID** (e.g. `#general`, `C01234ABC`). For `ingest`/`watch`,
-the source will list messages from specified channels. A `--channels` flag
-will accept multiple channels.
 
-For `slack search`, use Slack's `search.messages` API (requires user token with
-`search:read` scope — documented as available but with caveats).
+`--query` for Slack accepts a **channel spec**: channel name(s) or ID(s),
+comma-separated. Examples: `#general`, `C01234ABC`, `#general,#engineering`.
+
+For `slack search`, the query is passed directly to Slack's `search.messages` API
+(uses Slack's search syntax: `in:#channel from:@user "exact phrase"` etc.).
 
 ### Message ID
-Use `{channel_id}:{ts}` as the unified message ID. This is globally unique
-within a workspace and maps directly to Slack's canonical identifier.
+
+`{channel_id}:{ts}` — globally unique within a workspace.
 
 ### SDK
-Add `@slack/web-api` as a dependency. Lightweight, official, well-maintained.
+
+`@slack/web-api` — lightweight, official. For OAuth, we implement the flow
+ourselves (simple HTTP server + token exchange) rather than pulling in `@slack/oauth`
+to keep dependencies minimal.
 
 ---
 
@@ -43,50 +103,55 @@ npm install @slack/web-api
 ```
 
 ### 2. Create `platforms/slack/auth.ts`
-- `slack auth` command: reads token from stdin or `--token` flag
-- Saves to `.messagemon/slack/tokens/<account>.json` as `{ "token": "xoxb-..." }`
-- Validates token by calling `auth.test` API
-- Prints workspace name and bot user on success
+- `slack auth` command with `--mode=bot|oauth`
+- Bot mode: prompt for token, validate via `auth.test`, save
+- OAuth mode: read credentials.json, start local server on random port,
+  open browser to Slack OAuth URL, handle callback, exchange code,
+  save both tokens
+- Both modes save to `.messagemon/slack/tokens/<account>.json`
 
 ### 3. Create `platforms/slack/accounts.ts`
 - `slack accounts` command: lists token files under `.messagemon/slack/tokens/`
 - Reuses `resolveAllTokenDirs("slack")` from CliConfig
+- Shows team_name, token types present (bot/user), for each account
 - Same JSON/text output format as mail accounts
 
-### 4. Create `platforms/slack/toUnifiedMessage.ts`
-- Converts Slack `conversations.history` message objects to `UnifiedMessage`
-- Maps: `ts` → ID, `text` → bodyText, `user` → from (resolved via users.info cache)
-- Populates `SlackMetadata` with channelId, ts, threadTs, permalink
-- Handles attachments (Slack files → `UnifiedAttachment`)
-- Synthesizes subject from channel name + first line of text
+### 4. Create `platforms/slack/slackClient.ts`
+- Loads token file for an account
+- Returns `{ bot: WebClient, user?: WebClient, teamId, teamName }`
+- Shared by all Slack commands
 
-### 5. Create `platforms/slack/SlackSource.ts`
+### 5. Create `platforms/slack/toUnifiedMessage.ts`
+- Converts Slack `conversations.history` message objects to `UnifiedMessage`
+- Maps: `ts` → ID, `text` → bodyText, `user` → from (resolved via users cache)
+- Populates `SlackMetadata` with channelId, channelName, ts, threadTs, permalink
+- Handles attachments (Slack files → `UnifiedAttachment`)
+- Synthesizes subject from channel name
+
+### 6. Create `platforms/slack/SlackSource.ts`
 - Implements `MessageSource` interface
 - `listMessages()` async generator:
-  - Loads bot token for account
-  - Calls `conversations.history` for each channel (from query/channels param)
-  - Handles cursor-based pagination
+  - Parses query into channel list (resolve names → IDs via conversations.list)
+  - For each channel, calls `conversations.history` with cursor pagination
+  - For `oldest` strategy, passes `oldest` param to skip seen messages
   - Yields `UnifiedMessage` via `toUnifiedMessage()`
-- Exports `markSlackRead` (no-op or mark with reaction/emoji)
-- User ID → name resolution cache (batch via `users.info`)
+  - Early-terminates when hitting already-seen messages (state strategy)
+- Exports `markSlackRead(msg, account)` — dispatches based on strategy
+- User ID → name resolution with in-memory cache
 
-### 6. Update `platforms/slack/index.ts`
+### 7. Update `platforms/slack/index.ts`
 - Wire up real `auth` and `accounts` commands
-- Implement `search` using `search.messages` (user token required, document this)
+- Implement `search` using `search.messages` (user token required)
 - Implement `read` — fetch single message by channel + ts
-- Implement `send` — post message to channel via `chat.postMessage`
+- Implement `send` — post message via `chat.postMessage` (prefer user token)
 - Remove stub error messages
 
-### 7. Update `src/ingest/cli.ts` — multi-platform dispatch
-- Add `--platform` flag (default: infer from account name or "mail")
+### 8. Update `src/ingest/cli.ts` — multi-platform dispatch
+- Add `--platform` flag (default: infer from account prefix)
 - Update `resolveSources()` to dispatch to `slackSource` when platform is "slack"
-- Account naming convention: `slack:workspace-name` dispatches to Slack,
-  plain names dispatch to mail (backward compatible)
+- Account naming convention: `slack:workspace-name` → Slack, plain → mail
 
-### 8. Update `cli/index.ts`
-- No structural changes needed — `slack` command already dispatched
-- Update help text to reflect implemented status
-
-### 9. Update README
-- Add Slack setup instructions
-- Document Slack-specific flags and behavior
+### 9. Tests + docs
+- Unit tests for `toUnifiedMessage`
+- Integration test for channel name resolution
+- README: Slack setup instructions, scope requirements, auth modes
