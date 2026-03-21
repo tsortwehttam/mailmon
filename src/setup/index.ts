@@ -306,7 +306,7 @@ let pickSlackChannels = async (): Promise<string[]> => {
     let cursor: string | undefined
     while (true) {
       let res = await bot.conversations.list({
-        types: "public_channel",
+        types: "public_channel,private_channel",
         limit: 1000,
         exclude_archived: true,
         cursor,
