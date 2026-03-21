@@ -349,8 +349,13 @@ let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
       fail("Seed failed — missing token. Make sure you've authorized the accounts in this workspace.")
     } else if (msg.includes("Precondition check failed") || msg.includes("invalid_grant")) {
       fail(`Seed failed — Gmail token expired or revoked. ${msg}`)
-      console.log("Your token may have expired or been revoked. Try re-authorizing:")
-      console.log("  msgmon gmail auth")
+      console.log("Your token may have expired or been revoked.")
+      if (await confirm("Re-authorize Gmail now?", true)) {
+        let success = await authorizeOneGmailAccount()
+        if (success) {
+          return seedWorkspace(workspaceId)
+        }
+      }
     } else {
       fail(`Seed failed: ${msg}`)
     }
