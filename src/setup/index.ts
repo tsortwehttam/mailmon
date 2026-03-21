@@ -14,7 +14,7 @@ import {
 } from "../CliConfig"
 import { inferWorkspaceAccounts } from "../workspace/accounts"
 import { initWorkspace, loadWorkspaceConfig, listWorkspaceIds } from "../workspace/store"
-import { refreshWorkspace, syncWorkspaceContext } from "../workspace/runtime"
+import { bootstrapWorkspaceHistory } from "../workspace/runtime"
 
 // ---------------------------------------------------------------------------
 // Interactive helpers
@@ -432,22 +432,20 @@ let setupWorkspace = async (workspaceId: string, slackChannels?: string[]): Prom
 }
 
 // ---------------------------------------------------------------------------
-// Seed workspace
+// Bootstrap workspace history
 // ---------------------------------------------------------------------------
 
-let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
-  info("Seeding workspace (recording current message IDs without downloading)...")
-  let result = await refreshWorkspace({
+let bootstrapWorkspaceHistoryForSetup = async (workspaceId: string): Promise<boolean> => {
+  info("Bootstrapping workspace history...")
+  let result = await bootstrapWorkspaceHistory({
     workspaceId,
-    maxResults: 100,
-    markRead: false,
+    maxResults: 200,
     saveAttachments: false,
-    seed: true,
     verbose: false,
   })
 
-  if (result.scanned > 0 || result.ingested > 0) {
-    ok(`${result.scanned} message(s) scanned, ${result.ingested} recorded.`)
+  if (result.scanned > 0 || result.ingested > 0 || result.inboxSeeded > 0) {
+    ok(`${result.scanned} message(s) scanned, ${result.ingested} written to context, ${result.inboxSeeded} seeded into the inbox boundary.`)
   }
 
   for (let err of result.errors) {
@@ -456,7 +454,7 @@ let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
       console.log("Your token may have expired or been revoked.")
       if (await confirm("Re-authorize Gmail now?", true)) {
         let success = await authorizeOneGmailAccount()
-        if (success) return seedWorkspace(workspaceId)
+        if (success) return bootstrapWorkspaceHistoryForSetup(workspaceId)
       }
     } else if (err.includes("Missing token")) {
       fail(`${err}`)
@@ -466,23 +464,6 @@ let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
     }
   }
 
-  return result.errors.length === 0
-}
-
-let syncWorkspaceContextHistory = async (workspaceId: string): Promise<boolean> => {
-  info("Syncing recent context into workspace/context for the agent...")
-  let result = await syncWorkspaceContext({
-    workspaceId,
-    maxResults: 200,
-    saveAttachments: false,
-    verbose: false,
-  })
-
-  if (result.scanned > 0 || result.ingested > 0) {
-    ok(`${result.scanned} context message(s) scanned, ${result.ingested} written.`)
-  }
-
-  for (let err of result.errors) fail(err)
   return result.errors.length === 0
 }
 
@@ -557,21 +538,10 @@ export let runSetup = async (options: { workspace?: string }) => {
       return
     }
 
-    // Step 6: Seed
-    step(6, "Seed Workspace")
-    let seeded = await seedWorkspace(workspaceId)
-    if (!seeded) {
-      let cont = await confirm("Continue anyway?", true)
-      if (!cont) {
-        console.log("Setup paused. Fix the issue and re-run `msgmon setup`.")
-        return
-      }
-    }
-
-    // Step 7: Context
-    step(7, "Sync Context")
-    let syncedContext = await syncWorkspaceContextHistory(workspaceId)
-    if (!syncedContext) {
+    // Step 6: Bootstrap
+    step(6, "Bootstrapping Workspace History")
+    let bootstrapped = await bootstrapWorkspaceHistoryForSetup(workspaceId)
+    if (!bootstrapped) {
       let cont = await confirm("Continue anyway?", true)
       if (!cont) {
         console.log("Setup paused. Fix the issue and re-run `msgmon setup`.")
@@ -583,7 +553,7 @@ export let runSetup = async (options: { workspace?: string }) => {
     let workspaceDir = currentWorkspaceDir()
     console.log("Setup complete! To start, run in two terminals:")
     console.log(`  msgmon serve ${JSON.stringify(workspaceDir)}`)
-    console.log(`  mkdir -p /tmp/agent-sandbox && cd /tmp/agent-sandbox && msgmon client start --server=http://127.0.0.1:3271 --agent-command='codex .'`)
+    console.log(`  msgmon client start --server=http://127.0.0.1:3271 --dir=/tmp/agent-sandbox --agent-command='codex .'`)
     console.log(`The workspace's local server config is stored under ${JSON.stringify(path.resolve(workspaceDir, ".msgmon", "serve.json"))}.`)
   } finally {
     rl.close()

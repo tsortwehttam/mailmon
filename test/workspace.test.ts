@@ -11,6 +11,7 @@ let workspaceApi: typeof import("../src/workspace/api")
 let draftStore: typeof import("../src/draft/store")
 let workspaceAccounts: typeof import("../src/workspace/accounts")
 let cliConfig: typeof import("../src/CliConfig")
+let workspaceRuntime: typeof import("../src/workspace/runtime")
 
 let makeDraft = (id: string) => ({
   id,
@@ -36,6 +37,7 @@ before(async () => {
   workspaceApi = await import("../src/workspace/api")
   draftStore = await import("../src/draft/store")
   workspaceAccounts = await import("../src/workspace/accounts")
+  workspaceRuntime = await import("../src/workspace/runtime")
 })
 
 after(() => {
@@ -158,6 +160,41 @@ describe("workspace store", () => {
     assert.equal(workspaceStore.loadWorkspaceConfig("bundle-dst").name, "Bundle Source")
     let status = Buffer.from(imported.files.find(file => file.path === "status.md")!.contentBase64, "base64").toString("utf8")
     assert.match(status, /Bundled/)
+  })
+
+  it("can seed the inbox boundary from bootstrapped context ids", () => {
+    useDir("seed-from-context")
+    let result = workspaceStore.initWorkspace("default", {
+      accounts: ["default"],
+      query: "in:inbox category:primary is:unread",
+    })
+
+    let inboxStatePath = workspaceRuntime.buildWorkspaceStatePath(
+      result.config.id,
+      result.config.accounts,
+      result.config.query,
+    )
+
+    let seeded = workspaceRuntime.seedInboxStateFromContextState({
+      workspaceId: "default",
+      ids: ["msg-1", "msg-2"],
+      timestamps: {
+        "msg-1": "2026-03-22T00:00:00.000Z",
+        "msg-2": "2026-03-22T00:01:00.000Z",
+      },
+    })
+    assert.equal(seeded.seeded, 2)
+
+    let state = JSON.parse(fs.readFileSync(inboxStatePath, "utf8")) as { ingested: Record<string, string> }
+    assert.equal(state.ingested["msg-1"], "2026-03-22T00:00:00.000Z")
+    assert.equal(state.ingested["msg-2"], "2026-03-22T00:01:00.000Z")
+
+    let seededAgain = workspaceRuntime.seedInboxStateFromContextState({
+      workspaceId: "default",
+      ids: ["msg-2"],
+      timestamps: { "msg-2": "2026-03-22T00:02:00.000Z" },
+    })
+    assert.equal(seededAgain.seeded, 0)
   })
 })
 

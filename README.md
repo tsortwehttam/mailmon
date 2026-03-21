@@ -33,7 +33,6 @@ msgmon setup ./assistant-workspace
 msgmon serve ./assistant-workspace
 
 # 3. Start an agent-safe client mirror anywhere else
-mkdir -p /tmp/agent-sandbox
 msgmon client start \
   --server=http://127.0.0.1:3271 \
   --dir=/tmp/agent-sandbox \
@@ -400,24 +399,26 @@ The secure operating model is:
 
 This keeps the agent file-native while keeping secrets and outbound policy on the server side.
 
-### Cold start: seed now, sync context separately
+### Cold start: bootstrap workspace history
 
-On first run, `ingest` would emit every message matching the query as "new." For an agent, this is usually wrong. You want the action boundary to start from *now*, while still letting the agent read recent history for context.
+On first setup, you usually want two things at once:
 
-Use `--seed` to populate the state file without emitting anything:
+- recent history available in `context/`
+- the actionable inbox boundary established so old unread messages do not flood `inbox/`
+
+`msgmon setup <dir>` now does that in one bootstrap pass. It writes the initial history window into `context/` and seeds the inbox boundary from that same fetched set.
+
+After setup, normal refresh stays narrow:
 
 ```bash
-# Seed: absorb recent history silently
-msgmon ingest --seed --query='newer_than:30d' --max-results=500
+# Refresh only new actionable inbox items
+msgmon workspace refresh ./assistant-workspace
 
-# Sync historical reference material into workspace/context
+# Backfill or resync historical reference material only when needed
 msgmon workspace context-sync ./assistant-workspace --since=2026-03-01
-
-# Now refresh the actionable inbox normally
-msgmon workspace refresh ./assistant-workspace --mark-read
 ```
 
-The seed run records the action boundary in the state file. Historical backfills go into `context/`, while subsequent refresh runs only write genuinely new actionable messages into `inbox/`.
+That separation is deliberate: `inbox/` remains the queue of newly arrived actionable items, while `context/` holds historical reference material.
 
 ### Accessing thread context
 

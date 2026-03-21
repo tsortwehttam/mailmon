@@ -3,7 +3,7 @@ import path from "node:path"
 import crypto from "node:crypto"
 import { prependConfigDir, LOCAL_CONFIG_DIRNAME } from "../CliConfig"
 import { createJsonFileSink } from "../ingest/sinks"
-import { ingestOnce } from "../ingest/ingest"
+import { ingestOnce, readIngestState, writeIngestState } from "../ingest/ingest"
 import { gmailSource, markGmailRead, fetchGmailAttachment } from "../../platforms/gmail/MailSource"
 import { slackSource, markSlackRead } from "../../platforms/slack/SlackSource"
 import type { MessageSource } from "../ingest/ingest"
@@ -218,4 +218,51 @@ export let syncWorkspaceContext = async (params: {
     seed: false,
     verbose: params.verbose,
   })
+}
+
+export let seedInboxStateFromContextState = (params: {
+  workspaceId: string
+  ids: string[]
+  timestamps: Record<string, string>
+}) => {
+  let config = loadWorkspaceConfig(params.workspaceId)
+  let inboxStatePath = buildWorkspaceStatePath(config.id, config.accounts, config.query)
+  let inboxState = readIngestState(inboxStatePath)
+
+  let seeded = 0
+  for (let id of params.ids) {
+    if (inboxState.ingested[id]) continue
+    inboxState.ingested[id] = params.timestamps[id] ?? new Date().toISOString()
+    seeded += 1
+  }
+
+  if (seeded > 0) writeIngestState(inboxStatePath, inboxState)
+  return { seeded }
+}
+
+export let bootstrapWorkspaceHistory = async (params: {
+  workspaceId: string
+  maxResults: number
+  saveAttachments: boolean
+  verbose: boolean
+  since?: string
+  clear?: boolean
+}) => {
+  let config = loadWorkspaceConfig(params.workspaceId)
+  let contextStatePath = buildWorkspaceContextStatePath(config.id)
+  let before = readIngestState(contextStatePath)
+
+  let context = await syncWorkspaceContext(params)
+  let after = readIngestState(contextStatePath)
+  let newIds = Object.keys(after.ingested).filter(id => !before.ingested[id])
+  let inbox = seedInboxStateFromContextState({
+    workspaceId: params.workspaceId,
+    ids: newIds,
+    timestamps: after.ingested,
+  })
+
+  return {
+    ...context,
+    inboxSeeded: inbox.seeded,
+  }
 }

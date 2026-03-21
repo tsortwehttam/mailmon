@@ -29,7 +29,7 @@ export let configureSetupCli = (cli: Argv) =>
         "  2. Authorize Gmail account(s) via browser OAuth",
         "  3. Optionally set up Slack",
         "  4. Create a workspace",
-        "  5. Seed the workspace with current message IDs",
+        "  5. Bootstrap workspace history",
         "  6. Print the commands to start the server and agent",
         "",
         "Safe to re-run — skips steps that are already done.",
