@@ -338,8 +338,12 @@ let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
   } catch (err) {
     let msg = err instanceof Error ? err.message : String(err)
     if (msg.includes("Missing token")) {
-      fail(`Seed failed — missing token. Make sure you've authorized the accounts in this workspace.`)
-      console.log(`Error: ${msg}`)
+      fail("Seed failed — missing token. Make sure you've authorized the accounts in this workspace.")
+    } else if (msg.includes("Precondition check failed") || msg.includes("invalid_grant")) {
+      fail("Seed failed — Gmail token expired or revoked.")
+      console.log("This usually means your Google OAuth app is in 'Testing' mode (tokens expire after 7 days).")
+      console.log("Fix: go to Google Cloud Console > OAuth consent screen > publish the app,")
+      console.log("then re-authorize with: msgmon gmail auth")
     } else {
       fail(`Seed failed: ${msg}`)
     }
