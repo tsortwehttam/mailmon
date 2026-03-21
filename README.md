@@ -37,7 +37,7 @@ msgmon session start \
   --agent-command='codex .'
 ```
 
-The `--dir` flag places the agent's working copy outside the project tree. The agent sees only the workspace snapshot files (`inbox/`, `context/`, `workspace.json`, `instructions.md`, `drafts/`, etc.) and a `.msgmon-session/` folder with sync metadata. It never sees OAuth tokens, `credentials.json`, or `serve.json`.
+The `--dir` flag places the agent's working copy outside the project tree. The agent sees only the workspace snapshot files (`inbox/`, `context/`, `workspace.json`, `AGENTS.md`, `drafts/`, etc.) and a `.msgmon-session/` folder with sync metadata. It never sees OAuth tokens, `credentials.json`, or `serve.json`.
 
 New messages reach the agent through periodic refresh. Either:
 
@@ -171,8 +171,7 @@ msgmon workspace list
 Each workspace contains:
 
 - `workspace.json` — workspace metadata and ingest config
-- `instructions.md` — agent operating instructions
-- `user-profile.md` — user context and preferences
+- `AGENTS.md` — agent operating instructions and working purpose
 - `status.md` — agent-maintained working summary
 - `inbox/` — newly ingested actionable message JSON files
 - `context/` — system-managed historical reference message JSON files
@@ -244,7 +243,7 @@ Every request must include the header `X-Auth-Token: <token>`. All endpoints acc
 - `/api/workspace/export` returns either a JSON snapshot or a gzip-compressed bundle export.
 - `/api/workspace/bootstrap` creates a new server-owned workspace.
 - `/api/workspace/import` imports a previously exported bundle into a new or existing workspace.
-- `/api/workspace/push` accepts bounded changes back for writable files such as `status.md` and `drafts/*.json`.
+- `/api/workspace/push` accepts bounded changes back for writable files such as `AGENTS.md`, `status.md`, and `drafts/*.json`.
 - `/api/workspace/actions` is the policy gate for privileged operations such as sending drafts, marking messages read, and archiving Gmail.
 - Hidden server files such as state and workspace-local credentials are not included in exports.
 
@@ -258,7 +257,7 @@ msgmon sync push --workspace=inbox-agent
 msgmon sync watch --server=http://127.0.0.1:3271 --token=reader --workspace=inbox-agent
 ```
 
-By default the local mirror lives at `./.msgmon/agent/<workspace>/`. `pull` refuses to overwrite locally modified writable files unless `--force` is passed. `push` sends only bounded writable paths back to the server: `status.md`, `instructions.md`, `user-profile.md`, and `drafts/**`.
+By default the local mirror lives at `./.msgmon/agent/<workspace>/`. `pull` refuses to overwrite locally modified writable files unless `--force` is passed. `push` sends only bounded writable paths back to the server: `AGENTS.md`, `status.md`, and `drafts/**`.
 `watch` automatically pushes bounded local file changes before each pull cycle unless you pass `--no-auto-push`.
 
 ### `msgmon session`

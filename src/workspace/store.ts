@@ -43,55 +43,47 @@ export type WorkspaceBundle = {
 let WORKSPACE_DIRS = ["inbox", "context", "drafts"] as const
 let SERVER_DIRNAME = ".server"
 
-let DEFAULT_INSTRUCTIONS = `# Agent Instructions
+let DEFAULT_AGENTS = `# AGENTS.md
 
-You are an AI assistant managing a message workspace.
-You have a filesystem snapshot of the workspace, but you do not have direct
-access to platform credentials or unrestricted local messaging tools.
+You are managing a message workspace for a human user.
+
+Your job is to help the user stay on top of communications and the work that
+flows from them. Use the message history in this workspace to understand what
+is happening, identify what matters, and produce useful outputs for the user.
+
+## What You Should Do
+
+- Read \`inbox/\` for newly ingested actionable messages.
+- Read \`context/\` for historical background, prior threads, and relationship context.
+- Keep \`status.md\` current with outstanding tasks, deadlines, blockers, urgent issues, and follow-ups.
+- Surface urgent problems, critical mistakes, missed commitments, and time-sensitive decisions.
+- Track open loops across multiple threads and people.
+- Proactively draft replies when helpful.
+- Help coordinate complex work across multiple people and conversations.
+- Summarize documents, attachments, and message threads.
+- Produce artifacts the user may need, such as reports, plans, documents, presentations, summaries, and research notes.
+- Research issues raised in messages and suggest next steps.
+- Help the user schedule future work and sequence follow-ups.
 
 ## Workspace Layout
 
 \`\`\`
-workspace.json      — read-only workspace metadata
-instructions.md     — this file
-user-profile.md     — user identity, contacts, preferences
-status.md           — working summary maintained by the agent
-inbox/              — ingested messages (read-only input)
-context/            — historical reference messages (read-only input)
-drafts/             — draft JSON files the agent may create/update/delete
+workspace.json  — read-only workspace metadata
+AGENTS.md       — this file
+status.md       — working summary maintained by the agent
+inbox/          — newly ingested actionable message JSON files (read-only)
+context/        — historical reference message JSON files (read-only)
+drafts/         — draft JSON files the agent may create or revise
 \`\`\`
-
-## Operating Model
-
-1. Read messages from \`inbox/\` and \`context/\` and update \`status.md\`.
-2. Create or revise draft JSON files under \`drafts/\`.
-3. Do not assume any local command can safely send or mutate remote state.
-4. Privileged actions such as send, mark-read, or archive must go back through
-   the msgmon server API.
 
 ## Rules
 
-- Never send a message without explicit user approval.
 - Treat \`workspace.json\`, \`inbox/\`, and \`context/\` as read-only.
-- \`inbox/\` contains newly ingested actionable messages.
-- \`context/\` contains system-managed historical reference material.
-- Keep \`status.md\` concise and current.
-- Prefer editing existing drafts over creating duplicates.
-`
-
-let DEFAULT_USER_PROFILE = `# User Profile
-
-Name:
-Role:
-Organization:
-
-## Key Contacts
-
-## Preferences
-
-- Working hours: 9am-6pm
-- Urgent = needs response within 1 hour
-- Low priority = newsletters, notifications, FYI-only threads
+- Never send a message without explicit user approval.
+- Do not assume local tools can safely mutate remote state.
+- Use the msgmon server API for privileged actions such as send, mark-read, or archive.
+- Prefer revising an existing draft over creating duplicate drafts.
+- Keep \`status.md\` concise, high-signal, and decision-useful.
 `
 
 let DEFAULT_STATUS = `# Status
@@ -159,8 +151,7 @@ let isExportablePath = (relPath: string) => {
 
 let isWritablePath = (relPath: string) =>
   relPath === "status.md"
-  || relPath === "instructions.md"
-  || relPath === "user-profile.md"
+  || relPath === "AGENTS.md"
   || relPath.startsWith("drafts/")
 
 let validateWorkspaceDraftFile = (relPath: string, content: string) => {
@@ -255,8 +246,7 @@ export let initWorkspace = (
   }
 
   fs.writeFileSync(path.resolve(root, "workspace.json"), JSON.stringify(config, null, 2) + "\n")
-  fs.writeFileSync(path.resolve(root, "instructions.md"), DEFAULT_INSTRUCTIONS)
-  fs.writeFileSync(path.resolve(root, "user-profile.md"), DEFAULT_USER_PROFILE)
+  fs.writeFileSync(path.resolve(root, "AGENTS.md"), DEFAULT_AGENTS)
   fs.writeFileSync(path.resolve(root, "status.md"), DEFAULT_STATUS)
 
   return { path: root, config }

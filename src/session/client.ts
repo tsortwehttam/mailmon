@@ -81,8 +81,7 @@ let sessionPidPath = (dir: string) => path.resolve(sessionRoot(dir), SESSION_PID
 
 let writablePath = (relPath: string) =>
   relPath === "status.md"
-  || relPath === "instructions.md"
-  || relPath === "user-profile.md"
+  || relPath === "AGENTS.md"
   || relPath.startsWith("drafts/")
 
 let exportablePath = (relPath: string) => !(relPath.split("/")[0] ?? "").startsWith(".")
