@@ -77,7 +77,7 @@ describe("session sync integration", () => {
       })
       assert.equal(pulled.workspaceId, "agent-demo")
       assert.ok(fs.existsSync(path.join(localDir, "status.md")))
-      assert.ok(fs.existsSync(path.join(localDir, ".msgmon-session", "agent-manifest.json")))
+      assert.ok(fs.existsSync(path.join(localDir, ".msgmon-session", "session.json")))
 
       fs.writeFileSync(path.join(localDir, "status.md"), "# Status\n\nLocal update.\n")
 

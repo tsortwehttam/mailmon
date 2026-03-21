@@ -54,8 +54,6 @@ type SessionState = {
 
 let SESSION_DIRNAME = ".msgmon-session"
 let SESSION_STATE_PATH = "session.json"
-let SESSION_MANIFEST_PATH = "agent-manifest.json"
-let SESSION_LLMS_PATH = "llms.txt"
 let SESSION_PID_PATH = "watch.pid"
 
 let normalizeServerUrl = (serverUrl: string) => serverUrl.replace(/\/+$/, "")
@@ -75,8 +73,6 @@ export let resolveSessionConnection = (params: { serverUrl?: string; token?: str
 
 let sessionRoot = (dir: string) => path.resolve(dir, SESSION_DIRNAME)
 let sessionStatePath = (dir: string) => path.resolve(sessionRoot(dir), SESSION_STATE_PATH)
-let sessionManifestPath = (dir: string) => path.resolve(sessionRoot(dir), SESSION_MANIFEST_PATH)
-let sessionLlmsPath = (dir: string) => path.resolve(sessionRoot(dir), SESSION_LLMS_PATH)
 let sessionPidPath = (dir: string) => path.resolve(sessionRoot(dir), SESSION_PID_PATH)
 
 let writablePath = (relPath: string) =>
@@ -128,17 +124,13 @@ let loadState = (dir: string): SessionState | undefined => {
   return JSON.parse(fs.readFileSync(filePath, "utf8")) as SessionState
 }
 
-let saveState = (dir: string, state: SessionState, llmsText: string) => {
+let saveState = (dir: string, state: SessionState) => {
   ensureDir(sessionRoot(dir))
   fs.writeFileSync(sessionStatePath(dir), JSON.stringify(state, null, 2) + "\n")
-  fs.writeFileSync(sessionManifestPath(dir), JSON.stringify(state.manifest, null, 2) + "\n")
-  fs.writeFileSync(sessionLlmsPath(dir), llmsText)
 }
 
 let relativeSessionFiles = new Set([
   `${SESSION_DIRNAME}/${SESSION_STATE_PATH}`,
-  `${SESSION_DIRNAME}/${SESSION_MANIFEST_PATH}`,
-  `${SESSION_DIRNAME}/${SESSION_LLMS_PATH}`,
   `${SESSION_DIRNAME}/${SESSION_PID_PATH}`,
 ])
 
@@ -220,12 +212,6 @@ export let syncPull = async (params: {
   let connection = resolveSessionConnection({ serverUrl: params.serverUrl, token: params.token })
   ensureInitializedDirectory(dir, params.force)
 
-  let llmsText = await request<string>({
-    serverUrl: connection.serverUrl,
-    route: "/.well-known/llms.txt",
-    method: "GET",
-    responseType: "text",
-  })
   let manifest = await request<AgentManifest>({
     serverUrl: connection.serverUrl,
     token: connection.token,
@@ -257,7 +243,7 @@ export let syncPull = async (params: {
     manifest,
     syncedAt: new Date().toISOString(),
   }
-  saveState(dir, state, llmsText)
+  saveState(dir, state)
   return {
     workspaceId: snapshot.workspaceId,
     revision: snapshot.revision,
@@ -320,12 +306,6 @@ export let syncPush = async (params: {
     },
   })
 
-  let llmsText = await request<string>({
-    serverUrl,
-    route: "/.well-known/llms.txt",
-    method: "GET",
-    responseType: "text",
-  })
   writeSnapshot(dir, next)
   saveState(dir, {
     ...state,
@@ -335,7 +315,7 @@ export let syncPush = async (params: {
     lastRevision: next.revision,
     lastSnapshot: next,
     syncedAt: new Date().toISOString(),
-  }, llmsText)
+  })
 
   return {
     workspaceId,
