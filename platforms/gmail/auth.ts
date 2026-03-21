@@ -26,10 +26,15 @@ let authForAccount = async (account: string | undefined, verbose = false) => {
   // If no account name given, fetch the email address from the authorized account
   if (!account) {
     try {
-      let gmail = google.gmail({ version: "v1", auth })
+      let raw = JSON.parse(fs.readFileSync(credentialsPath, "utf8"))
+      let c = raw.installed ?? raw.web
+      let oauth2 = new google.auth.OAuth2(c.client_id, c.client_secret)
+      oauth2.setCredentials(auth.credentials)
+      let gmail = google.gmail({ version: "v1", auth: oauth2 })
       let profile = await gmail.users.getProfile({ userId: "me" })
       account = profile.data.emailAddress ?? DEFAULT_ACCOUNT
-    } catch {
+    } catch (err) {
+      verboseLog(verbose, "could not fetch email, using default", { error: err instanceof Error ? err.message : String(err) })
       account = DEFAULT_ACCOUNT
     }
   }
