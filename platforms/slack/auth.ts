@@ -1,7 +1,7 @@
 import fs from "node:fs"
-import http from "node:http"
 import crypto from "node:crypto"
 import { exec } from "node:child_process"
+import readline from "node:readline/promises"
 import { URL } from "node:url"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -48,7 +48,6 @@ let authBot = async (account: string, token: string, verbose = false) => {
 // ---------------------------------------------------------------------------
 
 let SLACK_OAUTH_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
-let OAUTH_PORTS = [9876, 9877, 9878, 9879, 9880]
 
 export let BOT_SCOPES = [
   "channels:history",
@@ -66,30 +65,23 @@ export let USER_SCOPES = [
   "chat:write",
 ].join(",")
 
-let tryListen = (server: http.Server, ports: number[]): Promise<number> =>
-  new Promise((resolve, reject) => {
-    let attempt = (i: number) => {
-      if (i >= ports.length) {
-        reject(new Error(
-          `Could not start local server — ports ${ports[0]}-${ports[ports.length - 1]} are in use.\n` +
-          `Check what's using them with: lsof -i :${ports[0]}`
-        ))
-        return
-      }
-      server.once("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") attempt(i + 1)
-        else reject(err)
-      })
-      server.listen(ports[i], "localhost", () => resolve(ports[i]))
-    }
-    attempt(0)
-  })
-
 let openBrowser = (url: string) => {
   let cmd = process.platform === "darwin" ? "open"
     : process.platform === "win32" ? "start"
     : "xdg-open"
   exec(`${cmd} ${JSON.stringify(url)}`, () => {})
+}
+
+let parseCode = (input: string): string | null => {
+  input = input.trim()
+  // Accept a bare code
+  if (/^\d+\.\d+\.\w+$/.test(input)) return input
+  // Accept a full URL containing ?code=...
+  try {
+    let url = new URL(input)
+    return url.searchParams.get("code")
+  } catch {}
+  return null
 }
 
 let authOAuth = async (account: string, verbose = false) => {
@@ -109,56 +101,32 @@ let authOAuth = async (account: string, verbose = false) => {
 
   let state = crypto.randomBytes(16).toString("hex")
 
-  // Start a local HTTP server to receive the OAuth callback
-  let server = http.createServer()
-  let port = await tryListen(server, OAUTH_PORTS)
-  let redirectUri = `http://localhost:${port}`
+  let authUrl =
+    `${SLACK_OAUTH_AUTHORIZE_URL}?client_id=${clientId}&scope=${BOT_SCOPES}` +
+    `&user_scope=${USER_SCOPES}&state=${state}`
 
-  let { code, receivedState } = await new Promise<{ code: string; receivedState: string }>((resolve, reject) => {
-    server.on("request", (req, res) => {
-      let url = new URL(req.url!, `http://localhost`)
-      let code = url.searchParams.get("code")
-      let receivedState = url.searchParams.get("state")
-      let error = url.searchParams.get("error")
+  openBrowser(authUrl)
+  console.log("Opening browser... if it didn't open, visit:")
+  console.log(authUrl)
+  console.log("After authorizing, Slack will redirect to a URL that fails to load.")
+  console.log("Copy the full URL from your browser's address bar and paste it here.")
 
-      if (error) {
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<h1>Authorization failed</h1><p>${error}</p><p>You can close this tab.</p>`)
-        server.close()
-        reject(new Error(`Slack OAuth error: ${error}`))
-        return
-      }
+  let rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  let input = await rl.question("Paste URL or code: ")
+  rl.close()
 
-      if (!code) {
-        res.writeHead(400, { "Content-Type": "text/html" })
-        res.end(`<h1>Missing code</h1><p>You can close this tab.</p>`)
-        return
-      }
+  let code = parseCode(input)
+  if (!code) throw new Error("Could not find an authorization code in that input. Try again.")
 
-      res.writeHead(200, { "Content-Type": "text/html" })
-      res.end(`<h1>Authorized!</h1><p>You can close this tab and return to the terminal.</p>`)
-      server.close()
-      resolve({ code, receivedState: receivedState ?? "" })
-    })
-
-    let authUrl =
-      `${SLACK_OAUTH_AUTHORIZE_URL}?client_id=${clientId}&scope=${BOT_SCOPES}` +
-      `&user_scope=${USER_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&state=${state}`
-
-    openBrowser(authUrl)
-    console.log(`Opening browser... if it didn't open, visit:`)
-    console.log(authUrl)
-    console.log("Waiting for callback...")
-
-    setTimeout(() => {
-      server.close()
-      reject(new Error("OAuth callback timed out after 5 minutes"))
-    }, 5 * 60 * 1000)
-  })
-
-  if (receivedState !== state) {
-    throw new Error("OAuth state mismatch — possible CSRF attack")
+  // Verify state if present in the pasted URL
+  try {
+    let url = new URL(input.trim())
+    let receivedState = url.searchParams.get("state")
+    if (receivedState && receivedState !== state) {
+      throw new Error("OAuth state mismatch — possible CSRF attack")
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("state mismatch")) throw e
   }
 
   // Exchange code for tokens
@@ -167,7 +135,6 @@ let authOAuth = async (account: string, verbose = false) => {
     client_id: clientId,
     client_secret: clientSecret,
     code,
-    redirect_uri: redirectUri,
   })
 
   if (!oauthResponse.ok) {

@@ -209,9 +209,8 @@ let authorizeOneSlackAccount = async (): Promise<boolean> => {
       console.log("2. Name it anything (e.g. \"msgmon\") and pick your workspace")
       console.log(`3. Under OAuth & Permissions, add Bot Token Scopes: ${BOT_SCOPES.replace(/,/g, ", ")}`)
       console.log(`4. Under OAuth & Permissions, add User Token Scopes: ${USER_SCOPES.replace(/,/g, ", ")}`)
-      console.log("5. Under OAuth & Permissions > Redirect URLs, click Add New Redirect URL, enter http://localhost:9876, click Add, then Save URLs")
-      console.log("6. Copy Client ID and Client Secret from Basic Information")
-      console.log(`7. Save as: ${credPath}`)
+      console.log("5. Copy Client ID and Client Secret from Basic Information")
+      console.log(`6. Save as: ${credPath}`)
       console.log(`Format: { "client_id": "...", "client_secret": "..." }`)
       await waitForEnter("Press Enter after saving credentials.json...")
       if (!fs.existsSync(credPath)) {
