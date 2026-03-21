@@ -332,35 +332,36 @@ let setupWorkspace = async (workspaceId: string): Promise<boolean> => {
 
 let seedWorkspace = async (workspaceId: string): Promise<boolean> => {
   info("Seeding workspace (recording current message IDs without downloading)...")
-  try {
-    let result = await refreshWorkspace({
-      workspaceId,
-      maxResults: 100,
-      markRead: false,
-      saveAttachments: false,
-      seed: true,
-      verbose: false,
-    })
-    ok(`Seed complete. ${result.scanned} message(s) scanned, ${result.ingested} recorded.`)
-    return true
-  } catch (err) {
-    let msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes("Missing token")) {
-      fail("Seed failed — missing token. Make sure you've authorized the accounts in this workspace.")
-    } else if (msg.includes("Precondition check failed") || msg.includes("invalid_grant")) {
-      fail(`Seed failed — Gmail token expired or revoked. ${msg}`)
+  let result = await refreshWorkspace({
+    workspaceId,
+    maxResults: 100,
+    markRead: false,
+    saveAttachments: false,
+    seed: true,
+    verbose: false,
+  })
+
+  if (result.scanned > 0 || result.ingested > 0) {
+    ok(`${result.scanned} message(s) scanned, ${result.ingested} recorded.`)
+  }
+
+  for (let err of result.errors) {
+    if (err.includes("Precondition check failed") || err.includes("invalid_grant")) {
+      fail(`${err}`)
       console.log("Your token may have expired or been revoked.")
       if (await confirm("Re-authorize Gmail now?", true)) {
         let success = await authorizeOneGmailAccount()
-        if (success) {
-          return seedWorkspace(workspaceId)
-        }
+        if (success) return seedWorkspace(workspaceId)
       }
+    } else if (err.includes("Missing token")) {
+      fail(`${err}`)
+      console.log("Make sure you've authorized the accounts in this workspace.")
     } else {
-      fail(`Seed failed: ${msg}`)
+      fail(err)
     }
-    return false
   }
+
+  return result.errors.length === 0
 }
 
 // ---------------------------------------------------------------------------

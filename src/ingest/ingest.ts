@@ -54,7 +54,7 @@ export type MessageSource = {
 // ---------------------------------------------------------------------------
 
 export type IngestParams = {
-  sources: Array<{ source: MessageSource; accounts: string[] }>
+  sources: Array<{ source: MessageSource; accounts: string[]; query?: string }>
   query: string
   maxResults: number
   sink: Sink
@@ -69,18 +69,20 @@ export type IngestParams = {
  * Single-pass ingest: scan all accounts, emit new messages to sink, update state.
  * Returns the count of newly ingested messages.
  */
-export let ingestOnce = async (params: IngestParams): Promise<{ ingested: number; scanned: number }> => {
+export let ingestOnce = async (params: IngestParams): Promise<{ ingested: number; scanned: number; errors: string[] }> => {
   let state = readIngestState(params.statePath)
   let ingested = 0
   let scanned = 0
+  let errors: string[] = []
 
-  for (let { source, accounts } of params.sources) {
+  for (let { source, accounts, query } of params.sources) {
     for (let account of accounts) {
-      verboseLog(params.verbose, "ingest scanning", { account, query: params.query })
+      let effectiveQuery = query ?? params.query
+      verboseLog(params.verbose, "ingest scanning", { account, query: effectiveQuery })
       try {
         for await (let msg of source.listMessages({
           account,
-          query: params.query,
+          query: effectiveQuery,
           maxResults: params.maxResults,
           verbose: params.verbose,
         })) {
@@ -101,12 +103,12 @@ export let ingestOnce = async (params: IngestParams): Promise<{ ingested: number
         }
       } catch (err) {
         let orig = err instanceof Error ? err.message : String(err)
-        throw new Error(`[account: ${account}] ${orig}`)
+        errors.push(`[account: ${account}] ${orig}`)
       }
     }
   }
 
-  return { ingested, scanned }
+  return { ingested, scanned, errors }
 }
 
 /**

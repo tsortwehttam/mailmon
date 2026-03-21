@@ -9,7 +9,7 @@ import type { MessageSource } from "../ingest/ingest"
 import type { UnifiedMessage } from "../types"
 import { loadWorkspaceConfig, workspaceRoot, workspaceStateRoot } from "./store"
 
-let resolveSources = (accounts: string[]): Array<{ source: MessageSource; accounts: string[] }> => {
+let resolveSources = (accounts: string[], query: string): Array<{ source: MessageSource; accounts: string[]; query?: string }> => {
   let gmailAccounts: string[] = []
   let slackAccounts: string[] = []
 
@@ -21,9 +21,15 @@ let resolveSources = (accounts: string[]): Array<{ source: MessageSource; accoun
     }
   }
 
-  let sources: Array<{ source: MessageSource; accounts: string[] }> = []
+  let sources: Array<{ source: MessageSource; accounts: string[]; query?: string }> = []
   if (gmailAccounts.length) sources.push({ source: gmailSource, accounts: gmailAccounts })
-  if (slackAccounts.length) sources.push({ source: slackSource, accounts: slackAccounts })
+  if (slackAccounts.length) {
+    // The workspace query is Gmail-specific (e.g. "is:unread").
+    // For Slack, the query must be channel names/IDs. If the workspace
+    // query doesn't look like channels, pass empty so Slack skips gracefully.
+    let looksLikeChannels = query.split(",").some(s => s.trim().startsWith("#") || /^[CDG][A-Z0-9]+$/.test(s.trim()))
+    sources.push({ source: slackSource, accounts: slackAccounts, query: looksLikeChannels ? query : "" })
+  }
   return sources
 }
 
@@ -61,7 +67,7 @@ export let refreshWorkspace = async (params: {
   })
 
   return ingestOnce({
-    sources: resolveSources(config.accounts),
+    sources: resolveSources(config.accounts, config.query),
     query: config.query,
     maxResults: params.maxResults,
     sink: dirSink,

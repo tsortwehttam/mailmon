@@ -98,9 +98,8 @@ export let slackSource: MessageSource = {
       .filter(Boolean)
 
     if (channelQueries.length === 0) {
-      throw new Error(
-        "Slack --query must specify one or more channels (e.g. #general,#engineering or C01234ABC)",
-      )
+      verboseLog(params.verbose, "slack: no channels specified, skipping", { account: params.account })
+      return
     }
 
     let channels = await resolveChannelIds(bot, channelQueries, params.verbose)
