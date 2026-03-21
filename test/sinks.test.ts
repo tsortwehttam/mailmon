@@ -71,7 +71,7 @@ describe("createJsonFileSink", () => {
 
     let entries = fs.readdirSync(outDir)
     assert.equal(entries.length, 1)
-    assert.match(entries[0], /^2024-01-15T10-30-00-000Z_msg-001\.json$/)
+    assert.match(entries[0], /^2024-01-15T10-30-00-000Z_gmail_msg-001\.json$/)
 
     let unified = JSON.parse(fs.readFileSync(path.join(outDir, entries[0]), "utf8"))
     assert.equal(unified.id, "msg-001")

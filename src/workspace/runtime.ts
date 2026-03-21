@@ -91,11 +91,11 @@ let resolveMarkRead = (msg: UnifiedMessage, account: string) => {
 export let buildWorkspaceStatePath = (workspaceId: string, accounts: string[], query: string) => {
   let key = JSON.stringify({ scope: "inbox", accounts: accounts.slice().sort(), query })
   let digest = crypto.createHash("sha256").update(key).digest("hex").slice(0, 16)
-  return path.resolve(workspaceStateRoot(workspaceId), `ingest-${digest}.json`)
+  return path.resolve(workspaceStateRoot(workspaceId), `inbox-${digest}.json`)
 }
 
 export let buildWorkspaceContextStatePath = (workspaceId: string) =>
-  path.resolve(workspaceStateRoot(workspaceId), "context.json")
+  path.resolve(workspaceStateRoot(workspaceId), "context-sync.json")
 
 let attachmentFetcher = (accounts: string[]) =>
   async (msg: UnifiedMessage, filename: string) => fetchGmailAttachment(msg, filename, accounts[0] ?? "default")

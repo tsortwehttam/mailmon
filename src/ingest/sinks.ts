@@ -43,7 +43,7 @@ let sanitizeFileName = (value: string) =>
 
 let messageFileName = (msg: UnifiedMessage) => {
   let stamp = msg.timestamp.replace(/[:.]/g, "-")
-  return `${stamp}_${sanitizeFileName(msg.id)}.json`
+  return `${stamp}_${sanitizeFileName(msg.platform)}_${sanitizeFileName(msg.id)}.json`
 }
 
 export let createJsonFileSink = (params: {
