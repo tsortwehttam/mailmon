@@ -114,9 +114,6 @@ let authOAuth = async (account: string, verbose = false) => {
   let port = await tryListen(server, OAUTH_PORTS)
   let redirectUri = `http://127.0.0.1:${port}`
 
-  console.log(`Make sure your Slack app has this Redirect URL: ${redirectUri}`)
-  console.log(`(OAuth & Permissions > Redirect URLs at https://api.slack.com/apps)`)
-
   let { code, receivedState } = await new Promise<{ code: string; receivedState: string }>((resolve, reject) => {
     server.on("request", (req, res) => {
       let url = new URL(req.url!, `http://localhost`)

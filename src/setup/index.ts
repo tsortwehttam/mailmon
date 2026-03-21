@@ -209,7 +209,7 @@ let authorizeOneSlackAccount = async (): Promise<boolean> => {
       console.log("2. Name it anything (e.g. \"msgmon\") and pick your workspace")
       console.log(`3. Under OAuth & Permissions, add Bot Token Scopes: ${BOT_SCOPES.replace(/,/g, ", ")}`)
       console.log(`4. Under OAuth & Permissions, add User Token Scopes: ${USER_SCOPES.replace(/,/g, ", ")}`)
-      console.log("5. Under OAuth & Permissions > Redirect URLs, add: http://127.0.0.1:9876")
+      console.log("5. Under OAuth & Permissions > Redirect URLs, click Add New Redirect URL, enter http://127.0.0.1:9876, click Add, then Save URLs")
       console.log("6. Copy Client ID and Client Secret from Basic Information")
       console.log(`7. Save as: ${credPath}`)
       console.log(`Format: { "client_id": "...", "client_secret": "..." }`)
