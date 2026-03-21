@@ -103,6 +103,7 @@ export let ingestOnce = async (params: IngestParams): Promise<{ ingested: number
         let orig = err instanceof Error ? err.message : String(err)
         throw new Error(`[account: ${account}] ${orig}`)
       }
+    }
   }
 
   return { ingested, scanned }
