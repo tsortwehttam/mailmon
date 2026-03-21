@@ -293,6 +293,8 @@ let checkSlack = async (): Promise<boolean> => {
 // Slack channel picker
 // ---------------------------------------------------------------------------
 
+let normalizeSlackChannelName = (value: string) => value.trim().replace(/^#/, "").toLowerCase()
+
 let pickSlackChannels = async (): Promise<string[]> => {
   let slackAccounts = listSlackTokens()
   if (slackAccounts.length === 0) return []
@@ -346,12 +348,33 @@ let pickSlackChannels = async (): Promise<string[]> => {
       return names
     }
 
-    let input = await prompt("Enter channels to monitor (comma-separated, e.g. #general,#engineering): ")
-    let picked = input.split(",").map(s => s.trim()).filter(Boolean)
-    if (picked.length > 0) return picked
+    let knownByName = new Map(channels.map(channel => [normalizeSlackChannelName(channel.name), `#${channel.name}`]))
+    while (true) {
+      let input = await prompt("Enter channels to monitor (comma-separated, e.g. #general,#engineering): ")
+      let raw = input.split(",").map(s => s.trim()).filter(Boolean)
+      if (raw.length === 0) {
+        console.log("No channels entered.")
+        continue
+      }
 
-    console.log("No channels entered.")
-    return pickSlackChannels()
+      let picked: string[] = []
+      let invalid = false
+      for (let entry of raw) {
+        let resolved = knownByName.get(normalizeSlackChannelName(entry))
+        if (!resolved) {
+          invalid = true
+          break
+        }
+        picked.push(resolved)
+      }
+
+      if (invalid) {
+        fail("Your list included a channel not here, please try again.")
+        continue
+      }
+
+      return Array.from(new Set(picked))
+    }
   } catch (err) {
     let msg = err instanceof Error ? err.message : String(err)
     if (msg.includes("missing_scope")) {
