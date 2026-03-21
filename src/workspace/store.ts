@@ -11,6 +11,7 @@ export interface WorkspaceConfig {
   name: string
   accounts: string[]
   query: string
+  slackChannels?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -113,6 +114,7 @@ let WorkspaceConfigSchema = z.object({
   name: z.string().min(1),
   accounts: z.array(z.string()).min(1),
   query: z.string(),
+  slackChannels: z.array(z.string()).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -203,7 +205,7 @@ let computeRevision = (files: WorkspaceExportFile[]) => {
 
 export let initWorkspace = (
   workspaceId: string,
-  options: { name?: string; accounts?: string[]; query?: string; overwrite?: boolean } = {},
+  options: { name?: string; accounts?: string[]; query?: string; slackChannels?: string[]; overwrite?: boolean } = {},
 ) => {
   let id = ensureSafeWorkspaceId(workspaceId)
   let root = workspaceRoot(id)
@@ -228,6 +230,7 @@ export let initWorkspace = (
     name: options.name ?? id,
     accounts: options.accounts ?? ["default"],
     query: options.query ?? "is:unread",
+    slackChannels: options.slackChannels?.length ? options.slackChannels : undefined,
     createdAt: now,
     updatedAt: now,
   }

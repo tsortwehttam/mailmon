@@ -288,10 +288,66 @@ let checkSlack = async (): Promise<boolean> => {
 }
 
 // ---------------------------------------------------------------------------
+// Slack channel picker
+// ---------------------------------------------------------------------------
+
+let pickSlackChannels = async (): Promise<string[]> => {
+  let slackAccounts = listSlackTokens()
+  if (slackAccounts.length === 0) return []
+
+  let accountName = slackAccounts[0]
+  try {
+    let { slackClients } = await import("../../platforms/slack/slackClient")
+    let clients = slackClients(accountName)
+    let bot = clients.bot
+
+    // Fetch channels the bot is a member of
+    let memberChannels: Array<{ id: string; name: string }> = []
+    let cursor: string | undefined
+    while (true) {
+      let res = await bot.conversations.list({
+        types: "public_channel,private_channel",
+        limit: 1000,
+        exclude_archived: true,
+        cursor,
+      })
+      for (let ch of res.channels ?? []) {
+        if (ch.id && ch.name && ch.is_member) {
+          memberChannels.push({ id: ch.id, name: ch.name })
+        }
+      }
+      cursor = res.response_metadata?.next_cursor || undefined
+      if (!cursor) break
+    }
+
+    if (memberChannels.length === 0) {
+      info("No Slack channels found that the bot is a member of.")
+      info("Invite the bot to channels first, then re-run setup.")
+      return []
+    }
+
+    let names = memberChannels.map(c => `#${c.name}`)
+    console.log(`Slack channels the bot is in: ${names.join(", ")}`)
+
+    if (await confirm("Monitor all of these channels?", true)) {
+      return names
+    }
+
+    let input = await prompt("Enter channels to monitor (comma-separated, e.g. #general,#engineering): ")
+    let picked = input.split(",").map(s => s.trim()).filter(Boolean)
+    return picked.length > 0 ? picked : []
+  } catch (err) {
+    let msg = err instanceof Error ? err.message : String(err)
+    fail(`Could not list Slack channels: ${msg}`)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Workspace setup
 // ---------------------------------------------------------------------------
 
-let setupWorkspace = async (workspaceId: string): Promise<boolean> => {
+let setupWorkspace = async (workspaceId: string, slackChannels?: string[]): Promise<boolean> => {
   let existing = listWorkspaceIds()
 
   if (existing.includes(workspaceId)) {
@@ -300,6 +356,7 @@ let setupWorkspace = async (workspaceId: string): Promise<boolean> => {
       let config = loadWorkspaceConfig(workspaceId)
       info(`Accounts: ${config.accounts.join(", ")}`)
       info(`Query: ${config.query}`)
+      if (config.slackChannels?.length) info(`Slack channels: ${config.slackChannels.join(", ")}`)
       return true
     } catch {
       return true
@@ -315,7 +372,7 @@ let setupWorkspace = async (workspaceId: string): Promise<boolean> => {
   info(`Detected accounts: ${accounts.join(", ")}`)
 
   try {
-    let result = initWorkspace(workspaceId, { accounts })
+    let result = initWorkspace(workspaceId, { accounts, slackChannels })
     ok(`Created workspace "${workspaceId}" at ${result.path}`)
     info(`Accounts: ${result.config.accounts.join(", ")}`)
     info(`Query: ${result.config.query}`)
@@ -415,16 +472,28 @@ export let runSetup = async (options: { workspace?: string }) => {
 
     ok(`Found ${allAccounts.length} account(s): ${allAccounts.join(", ")}`)
 
-    // Step 4: Workspace
-    step(4, `Workspace "${workspaceId}"`)
-    let hasWorkspace = await setupWorkspace(workspaceId)
+    // Step 4: Slack channels
+    let slackChannels: string[] | undefined
+    if (allAccounts.some(a => a.startsWith("slack:"))) {
+      step(4, "Slack Channels")
+      slackChannels = await pickSlackChannels()
+      if (slackChannels.length > 0) {
+        ok(`Monitoring: ${slackChannels.join(", ")}`)
+      } else {
+        skip("No Slack channels selected.")
+      }
+    }
+
+    // Step 5: Workspace
+    step(5, `Workspace "${workspaceId}"`)
+    let hasWorkspace = await setupWorkspace(workspaceId, slackChannels)
     if (!hasWorkspace) {
       console.log("Setup could not create workspace. Fix the issues above and re-run.")
       return
     }
 
-    // Step 5: Seed
-    step(5, "Seed Workspace")
+    // Step 6: Seed
+    step(6, "Seed Workspace")
     let seeded = await seedWorkspace(workspaceId)
     if (!seeded) {
       let cont = await confirm("Continue anyway?", true)
