@@ -17,9 +17,8 @@ let withShared = (y: Argv) =>
       describe: "Local agent-safe workspace mirror directory (defaults to current directory)",
     })
 
-export let configureClientCli = (cli: Argv) =>
+let addSyncCommands = (cli: Argv) =>
   cli
-    .usage("Usage: $0 <command> [options]")
     .command(
       "pull",
       "Pull the latest agent-safe workspace snapshot from serve",
@@ -97,13 +96,9 @@ export let configureClientCli = (cli: Argv) =>
         })
       },
     )
-    .demandCommand(1, "Choose a command: pull, push, or watch.")
-    .strict()
-    .help()
 
-export let configureSessionCli = (cli: Argv) =>
+let addSessionCommands = (cli: Argv) =>
   cli
-    .usage("Usage: $0 <command> [options]")
     .command(
       "start",
       "Bootstrap a local mirror and optionally launch an agent command",
@@ -173,6 +168,21 @@ export let configureSessionCli = (cli: Argv) =>
         console.log(JSON.stringify(stopSessionWatch(dir), null, 2))
       },
     )
+
+export let configureClientCli = (cli: Argv) =>
+  addSessionCommands(addSyncCommands(
+    cli
+      .usage("Usage: $0 <command> [options]"),
+  ))
+    .demandCommand(1, "Choose a command: start, status, stop, pull, push, or watch.")
+    .strict()
+    .help()
+
+export let configureSessionCli = (cli: Argv) =>
+  addSessionCommands(
+    cli
+      .usage("Usage: $0 <command> [options]"),
+  )
     .demandCommand(1, "Choose a command: start, status, or stop.")
     .strict()
     .help()
