@@ -116,27 +116,35 @@ let listGmailTokens = (): string[] => {
 }
 
 let authorizeOneGmailAccount = async (): Promise<boolean> => {
-  let accountName = await prompt("Account name (e.g. personal, work) [default]: ")
-  if (!accountName) accountName = "default"
-
-  let existing = listGmailTokens()
-  if (existing.includes(accountName)) {
-    ok(`Account "${accountName}" is already authorized.`)
-    return true
-  }
-
-  info(`Starting OAuth flow for account "${accountName}"...`)
   info("A browser window will open. Sign in and grant access.")
 
   try {
     let { authenticate } = await import("@google-cloud/local-auth")
+    let { google } = await import("googleapis")
     let credentialsPath = resolveCredentialsPath("gmail")
     let tokenDir = resolveTokenWriteDir("gmail")
-    let tokenPath = resolveTokenWritePathForAccount(accountName, "gmail")
     fs.mkdirSync(tokenDir, { recursive: true })
     let auth = await authenticate({ keyfilePath: credentialsPath, scopes: GMAIL_SCOPES })
+
+    // Use the email address as the account name
+    let accountName: string
+    try {
+      let gmail = google.gmail({ version: "v1", auth })
+      let profile = await gmail.users.getProfile({ userId: "me" })
+      accountName = profile.data.emailAddress ?? "default"
+    } catch {
+      accountName = "default"
+    }
+
+    let existing = listGmailTokens()
+    if (existing.includes(accountName)) {
+      ok(`Account "${accountName}" is already authorized.`)
+      return true
+    }
+
+    let tokenPath = resolveTokenWritePathForAccount(accountName, "gmail")
     fs.writeFileSync(tokenPath, JSON.stringify(auth.credentials, null, 2))
-    ok(`Saved token: ${tokenPath}`)
+    ok(`Saved token for ${accountName}`)
     return true
   } catch (err) {
     let msg = err instanceof Error ? err.message : String(err)

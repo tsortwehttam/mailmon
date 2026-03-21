@@ -1,4 +1,5 @@
 import { authenticate } from "@google-cloud/local-auth"
+import { google } from "googleapis"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -14,14 +15,26 @@ import {
 import type { Argv } from "yargs"
 import { verboseLog } from "../../src/Verbose"
 
-let authForAccount = async (account: string, verbose = false) => {
+let authForAccount = async (account: string | undefined, verbose = false) => {
   let credentialsPath = resolveCredentialsPath("gmail")
   let tokenDir = resolveTokenWriteDir("gmail")
-  let tokenPath = resolveTokenWritePathForAccount(account, "gmail")
-  verboseLog(verbose, "auth target", { account, credentialsPath, tokenDir, tokenPath })
+  verboseLog(verbose, "auth target", { account: account ?? "(auto)", credentialsPath, tokenDir })
 
   fs.mkdirSync(tokenDir, { recursive: true })
   let auth = await authenticate({ keyfilePath: credentialsPath, scopes: GMAIL_SCOPES })
+
+  // If no account name given, fetch the email address from the authorized account
+  if (!account) {
+    try {
+      let gmail = google.gmail({ version: "v1", auth })
+      let profile = await gmail.users.getProfile({ userId: "me" })
+      account = profile.data.emailAddress ?? DEFAULT_ACCOUNT
+    } catch {
+      account = DEFAULT_ACCOUNT
+    }
+  }
+
+  let tokenPath = resolveTokenWritePathForAccount(account, "gmail")
   fs.writeFileSync(tokenPath, JSON.stringify(auth.credentials, null, 2))
   console.log(`Saved ${tokenPath}`)
 }
@@ -31,8 +44,7 @@ export let configureAuthCli = (cli: Argv) =>
     .usage("Usage: $0 [options]")
     .option("account", {
       type: "string",
-      default: DEFAULT_ACCOUNT,
-      describe: "Token account name (writes .msgmon/gmail/tokens/<account>.json)",
+      describe: "Token account name (defaults to the Gmail address after auth)",
     })
     .option("verbose", {
       alias: "v",
