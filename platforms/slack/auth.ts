@@ -80,7 +80,7 @@ let tryListen = (server: http.Server, ports: number[]): Promise<number> =>
         if (err.code === "EADDRINUSE") attempt(i + 1)
         else reject(err)
       })
-      server.listen(ports[i], "127.0.0.1", () => resolve(ports[i]))
+      server.listen(ports[i], "localhost", () => resolve(ports[i]))
     }
     attempt(0)
   })
@@ -112,7 +112,7 @@ let authOAuth = async (account: string, verbose = false) => {
   // Start a local HTTP server to receive the OAuth callback
   let server = http.createServer()
   let port = await tryListen(server, OAUTH_PORTS)
-  let redirectUri = `http://127.0.0.1:${port}`
+  let redirectUri = `http://localhost:${port}`
 
   let { code, receivedState } = await new Promise<{ code: string; receivedState: string }>((resolve, reject) => {
     server.on("request", (req, res) => {
