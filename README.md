@@ -37,6 +37,8 @@ msgmon client start \
 
 The agent sees only exported files plus `.msgmon-session/` sync metadata. New messages arrive via explicit pulls — either `msgmon server pull ./workspace` on a cron, or `POST /api/workspace/pull` through the server.
 
+During setup, the initial Gmail bootstrap pull uses `in:inbox category:primary` plus the chosen time range. Ongoing server pulls use the workspace query, which also currently defaults to `in:inbox category:primary`.
+
 Typical recurring server-side pull:
 
 ```bash
@@ -119,7 +121,7 @@ Draft IDs support prefix matching.
 Directory-based server workspace lifecycle.
 
 ```bash
-msgmon server init ./workspace --account=default --query='in:inbox category:primary is:unread'
+msgmon server init ./workspace --account=default --query='in:inbox category:primary'
 msgmon server pull ./workspace
 msgmon server pull ./workspace --since=2026-03-01T00:00:00Z --until=2026-03-22T12:00:00Z
 msgmon server show ./workspace

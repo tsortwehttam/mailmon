@@ -194,7 +194,7 @@ export let configureIngestCli = (cli: Argv) =>
     .example("$0 --account=work --account=personal", "Ingest from multiple accounts, emit NDJSON to stdout")
     .example("$0 --sink=jsonl --out-file=./messages.jsonl --save-attachments", "Append messages + attachments to a JSONL file")
     .example("$0 --sink=exec --exec-cmd='./handle.sh'", "Run a command for each new message")
-    .example(`$0 --query='${DEFAULT_GMAIL_WORKSPACE_QUERY}' --mark-read`, "Ingest unread primary-inbox messages and mark them read")
+    .example(`$0 --query='${DEFAULT_GMAIL_WORKSPACE_QUERY}' --mark-read`, "Ingest primary-inbox messages and mark them read")
     .example("$0 --seed --query='newer_than:30d' --max-results=500", "Seed state with recent history without emitting")
     .epilog(
       [

@@ -12,6 +12,7 @@ import {
   PWD_CONFIG_DIR,
   currentWorkspaceDir,
 } from "../CliConfig"
+import { DEFAULT_GMAIL_SETUP_QUERY } from "../defaults"
 import { inferWorkspaceAccounts } from "../workspace/accounts"
 import { initWorkspace, loadWorkspaceConfig, listWorkspaceIds } from "../workspace/store"
 import { pullWorkspaceMessages } from "../workspace/runtime"
@@ -437,8 +438,9 @@ let setupWorkspace = async (workspaceId: string, slackChannels?: string[]): Prom
 
 let pullMessagesForSetup = async (workspaceId: string, params: { since?: string; until?: string } = {}): Promise<boolean> => {
   let config = loadWorkspaceConfig(workspaceId)
+  let setupQuery = DEFAULT_GMAIL_SETUP_QUERY
   info("Pulling initial messages...")
-  info(`Gmail query: ${config.query}`)
+  info(`Gmail query: ${setupQuery}`)
   if (config.slackChannels?.length) info(`Slack channels: ${config.slackChannels.join(", ")}`)
   if (params.since) info(`Since: ${params.since}`)
   if (params.until) info(`Until: ${params.until}`)
@@ -449,6 +451,7 @@ let pullMessagesForSetup = async (workspaceId: string, params: { since?: string;
     saveAttachments: false,
     seed: false,
     verbose: false,
+    query: setupQuery,
     since: params.since,
     until: params.until,
   })

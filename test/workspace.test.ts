@@ -164,7 +164,7 @@ describe("workspace store", () => {
     let dir = useDir("pull-state")
     let result = workspaceStore.initWorkspace("default", {
       accounts: ["default"],
-      query: "in:inbox category:primary is:unread",
+      query: "in:inbox category:primary",
     })
 
     let pullStatePath = workspaceRuntime.buildWorkspacePullStatePath(
